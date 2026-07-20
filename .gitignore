@@ -28,6 +28,9 @@ pnpm-debug.log*
 *.tsbuildinfo
 next-env.d.ts
 
+# Generated Prisma client
+src/generated/prisma/
+
 # OS and editor files
 .DS_Store
 .idea/

@@ -26,5 +26,9 @@ jobs:
         run: npm run format:check
       - name: Run ESLint
         run: npm run lint
+      - name: Generate Prisma Client
+        env:
+          DATABASE_URL: postgresql://gymflow:placeholder@localhost:5432/gymflow?schema=public
+        run: npm run prisma:generate
       - name: Type-check
         run: npm run typecheck
