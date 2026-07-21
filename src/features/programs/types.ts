@@ -1,0 +1,27 @@
+export type ExerciseDefinition = {
+  id: string;
+  muscleGroup: string;
+  name: string;
+};
+
+export type ProgramExercise = ExerciseDefinition & {
+  exerciseId: string;
+  id: string;
+  targetRepMax?: number;
+  targetRepMin?: number;
+  targetSets: number;
+};
+
+export type WorkoutDay = {
+  exercises: ProgramExercise[];
+  id: string;
+  name: string;
+};
+
+export type WorkoutProgram = {
+  days: WorkoutDay[];
+  description?: string;
+  id: string;
+  name: string;
+  updatedAt: string;
+};

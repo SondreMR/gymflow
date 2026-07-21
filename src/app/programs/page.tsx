@@ -1,10 +1,17 @@
-import { PlaceholderPage } from "@/components/app-shell/placeholder-page";
+import { AppShell } from "@/components/app-shell/app-shell";
+import {
+  NewProgramButton,
+  ProgramsScreen,
+} from "@/features/programs/components/programs-screen";
 
 export default function ProgramsPage() {
   return (
-    <PlaceholderPage
-      description="Your structured training plans will live here."
+    <AppShell
+      actions={<NewProgramButton />}
+      eyebrow="Your training plans"
       title="Programs"
-    />
+    >
+      <ProgramsScreen />
+    </AppShell>
   );
 }

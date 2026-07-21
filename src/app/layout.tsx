@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
 import { env } from "@/config/env";
+import { ProgramStoreProvider } from "@/features/programs/program-store";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -14,7 +15,9 @@ type RootLayoutProps = Readonly<{ children: ReactNode }>;
 export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
-      <body>{children}</body>
+      <body>
+        <ProgramStoreProvider>{children}</ProgramStoreProvider>
+      </body>
     </html>
   );
 }
