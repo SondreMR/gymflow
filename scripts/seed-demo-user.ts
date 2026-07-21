@@ -6,6 +6,10 @@ import { createClient } from "@supabase/supabase-js";
 import { PrismaClient, WeightUnit } from "../src/generated/prisma/client";
 import { getWeeklyGoalStreaksFromDates } from "../src/features/dashboard/dashboard-utils";
 import {
+  DEMO_SYSTEM_EXERCISE_KEYS,
+  resolveDemoSystemExercises,
+} from "../src/lib/system-exercises";
+import {
   calculateBaseXp,
   calculateEarnedXp,
   getEligibleTrophies,
@@ -20,6 +24,22 @@ const DEMO_DESCRIPTION = "GymFlow showcase demo data — safe to regenerate";
 const DEMO_LEVEL = 55;
 const DEMO_XP_TARGET = totalXpRequiredForLevel(DEMO_LEVEL) + 350;
 const WEEKLY_GOAL = 5;
+const MAX_SETS_PER_SESSION = 24;
+
+function redactSensitiveText(value: string) {
+  return value
+    .replace(/postgres(?:ql)?:\/\/[^\s"']+/gi, "[REDACTED_DATABASE_URL]")
+    .replace(/(SUPABASE_SERVICE_ROLE_KEY\s*[=:]\s*)\S+/gi, "$1[REDACTED]")
+    .replace(
+      /\b(?:sb_(?:secret|publishable)_[A-Za-z0-9_-]+|eyJ[A-Za-z0-9._-]+)\b/g,
+      "[REDACTED_TOKEN]",
+    )
+    .replace(/Bearer\s+\S+/gi, "Bearer [REDACTED]");
+}
+
+function diagnosticError(message: string) {
+  return new Error(message);
+}
 
 type Arguments = {
   authUserId?: string;
@@ -88,7 +108,7 @@ const days: DayDefinition[] = [
     exercises: [
       { key: "conventional-deadlift", sets: 3, repRange: [3, 6] },
       { key: "back-squat", sets: 3, repRange: [6, 10] },
-      { key: "leg-curl", sets: 3, repRange: [10, 15] },
+      { key: "lying-leg-curl", sets: 3, repRange: [10, 15] },
     ],
   },
 ];
@@ -174,7 +194,7 @@ function atUtc(weekStart: Date, dayOffset: number, hour: number) {
   return date;
 }
 
-function buildPlans(now = new Date()) {
+export function buildPlans(now = new Date()) {
   const currentWeek = startOfUtcWeek(now);
   const plans: SessionPlan[] = [];
   let index = 0;
@@ -194,7 +214,7 @@ function buildPlans(now = new Date()) {
 
   // Earlier work builds credible total XP. A deliberately incomplete week resets
   // the visible streak before the final ten successful weeks.
-  for (let week = -24; week <= -13; week += 1) addWeek(week, [0, 1, 3, 4, 5]);
+  for (let week = -24; week <= -14; week += 1) addWeek(week, [0, 1, 3, 4, 5]);
   addWeek(-12, [2]);
   for (let week = -11; week <= -2; week += 1) addWeek(week, [0, 1, 3, 4, 5]);
 
@@ -210,7 +230,7 @@ function buildPlans(now = new Date()) {
   );
 }
 
-function calculatePlansXp(plans: SessionPlan[]) {
+export function calculatePlansXp(plans: SessionPlan[]) {
   const completedDates: Date[] = [];
   let totalXp = 0;
   for (const plan of plans) {
@@ -237,23 +257,97 @@ function calculatePlansXp(plans: SessionPlan[]) {
   return totalXp;
 }
 
-function tunePlans(plans: SessionPlan[], existingXp: number) {
-  let totalXp = calculatePlansXp(plans) + existingXp;
+export function getSeedStartingXp({
+  existingXp,
+  replaceExistingTarget,
+}: {
+  existingXp: number;
+  replaceExistingTarget: boolean;
+}) {
+  // Takeover deletes all target-owned workout history in the same transaction
+  // that creates the showcase data, so its projection starts from zero XP.
+  return replaceExistingTarget ? 0 : existingXp;
+}
+
+export function tunePlans(plans: SessionPlan[], startingXp: number) {
+  let totalXp = calculatePlansXp(plans) + startingXp;
   let cursor = plans.length - 1;
   while (totalXp < DEMO_XP_TARGET && cursor >= 0) {
-    if (plans[cursor].setCount < 16) {
+    if (plans[cursor].setCount < MAX_SETS_PER_SESSION) {
       plans[cursor].setCount += 1;
-      totalXp = calculatePlansXp(plans) + existingXp;
+      totalXp = calculatePlansXp(plans) + startingXp;
     }
     cursor -= 1;
     if (cursor < 0 && totalXp < DEMO_XP_TARGET) cursor = plans.length - 1;
   }
+  if (totalXp < DEMO_XP_TARGET) {
+    throw new Error(
+      "The planned showcase history cannot reach the Level 55 XP target within its configured session limit.",
+    );
+  }
   if (totalXp >= totalXpRequiredForLevel(DEMO_LEVEL + 1)) {
     throw new Error(
-      "Existing data prevents an approximately Level 55 demo. Use a dedicated showcase account.",
+      "The planned showcase history exceeds the Level 55 range. Adjust the demo plan before seeding.",
     );
   }
   return totalXp;
+}
+
+export function createDemoProjection({
+  existingXp = 0,
+  now,
+  replaceExistingTarget = false,
+}: {
+  existingXp?: number;
+  now?: Date;
+  replaceExistingTarget?: boolean;
+} = {}) {
+  const plans = buildPlans(now);
+  const projectedXp = tunePlans(
+    plans,
+    getSeedStartingXp({ existingXp, replaceExistingTarget }),
+  );
+  const projectedLevel = getLevelProgress(projectedXp).current;
+  const completedDates = plans.map((plan) => plan.completedAt);
+  const streakWeeks = getWeeklyGoalStreaksFromDates(
+    completedDates,
+    WEEKLY_GOAL,
+    now ?? new Date(),
+  ).current;
+  return {
+    plans,
+    projectedLevel,
+    projectedXp,
+    streakMultiplier: getStreakMultiplier(streakWeeks),
+    streakWeeks,
+    targetTrophies: getEligibleTrophies(projectedLevel),
+  };
+}
+
+export function assertSafeDefaultSeedTarget({
+  customExercises,
+  nonDemoPrograms,
+  nonDemoRecords,
+  nonDemoSessions,
+}: {
+  customExercises: number;
+  nonDemoPrograms: number;
+  nonDemoRecords: number;
+  nonDemoSessions: number;
+}) {
+  if (!nonDemoSessions && !nonDemoPrograms && !customExercises && !nonDemoRecords) {
+    return;
+  }
+  throw diagnosticError(
+    [
+      "Target validation failed: non-demo data exists; safe default seeding is refusing takeover.",
+      `Non-demo workout sessions: ${nonDemoSessions}`,
+      `Non-demo programs: ${nonDemoPrograms}`,
+      `Private custom exercises: ${customExercises}`,
+      `Personal records not linked to managed demo sessions: ${nonDemoRecords}`,
+      "To intentionally replace this exact test account, use --replace-existing-target with an explicit --auth-user-id and --confirm.",
+    ].join("\n"),
+  );
 }
 
 async function findTargetUser(prisma: PrismaClient, args: Arguments) {
@@ -286,12 +380,41 @@ async function findTargetUser(prisma: PrismaClient, args: Arguments) {
     if (!authUserId)
       throw new Error("No Supabase Auth user matches the supplied email.");
   }
-  const users = await prisma.user.findMany({ where: { authUserId } });
-  if (users.length !== 1)
-    throw new Error(
-      "The selected Supabase Auth ID must map to exactly one GymFlow User. Sign in once before seeding.",
+  if (!authUserId) {
+    throw diagnosticError(
+      "Target validation failed: no Supabase Auth user ID was resolved.",
     );
+  }
+  const [users, supabaseIdentity] = await Promise.all([
+    prisma.user.findMany({ where: { authUserId } }),
+    inspectSupabaseIdentity(authUserId),
+  ]);
+  if (users.length !== 1) {
+    throw diagnosticError(
+      [
+        "Target validation failed: Prisma user mapping.",
+        `Auth user ID received: ${authUserId}`,
+        `Supabase identity: ${supabaseIdentity}`,
+        `Prisma user mapping count: ${users.length}`,
+      ].join("\n"),
+    );
+  }
   return users[0];
+}
+
+async function inspectSupabaseIdentity(authUserId: string) {
+  const url = process.env.NEXT_PUBLIC_SUPABASE_URL;
+  const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !serviceRoleKey) {
+    return "not checked (SUPABASE_SERVICE_ROLE_KEY is not configured)";
+  }
+  const supabase = createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+  const { data, error } = await supabase.auth.admin.getUserById(authUserId);
+  if (data.user) return "found";
+  if (error?.status === 404) return "not found";
+  return `lookup unavailable${error?.status ? ` (HTTP ${error.status})` : ""}`;
 }
 
 async function getTargetDataSummary(prisma: PrismaClient, userId: string) {
@@ -331,6 +454,71 @@ async function getTargetDataSummary(prisma: PrismaClient, userId: string) {
   };
 }
 
+type TargetDataTransaction = Pick<
+  PrismaClient,
+  "exercise" | "personalRecord" | "userTrophy" | "workoutProgram" | "workoutSession"
+>;
+
+export async function removeTargetApplicationData(
+  tx: TargetDataTransaction,
+  userId: string,
+) {
+  // The schema's cascading relations remove nested sets, session exercises,
+  // workout-day exercises, and workout days. Every predicate is pinned to the
+  // selected GymFlow user; system exercises have no user ID and are untouched.
+  await tx.personalRecord.deleteMany({ where: { userId } });
+  await tx.userTrophy.deleteMany({ where: { userId } });
+  await tx.workoutSession.deleteMany({ where: { userId } });
+  await tx.workoutProgram.deleteMany({ where: { userId } });
+  await tx.exercise.deleteMany({ where: { userId, isSystem: false } });
+}
+
+export async function runTakeoverCleanup({
+  dryRun,
+  tx,
+  userId,
+}: {
+  dryRun: boolean;
+  tx: TargetDataTransaction;
+  userId: string;
+}) {
+  if (dryRun) return false;
+  await removeTargetApplicationData(tx, userId);
+  return true;
+}
+
+async function resolveRequiredSystemExercises(client: Pick<PrismaClient, "exercise">) {
+  const exercises = await client.exercise.findMany({
+    where: { systemKey: { in: [...DEMO_SYSTEM_EXERCISE_KEYS] } },
+    select: {
+      id: true,
+      isSystem: true,
+      muscleGroup: true,
+      name: true,
+      systemKey: true,
+      userId: true,
+    },
+  });
+  const resolution = resolveDemoSystemExercises(exercises);
+  if (!resolution.isComplete) {
+    const diagnosticList = resolution.diagnostics
+      .filter(({ failedCriterion }) => failedCriterion)
+      .map(
+        ({ expectedIdentifier, matchingExerciseExists, failedCriterion }) =>
+          `- expected exercise identifier: ${expectedIdentifier}; matching exercise exists: ${matchingExerciseExists}; failed criterion: ${failedCriterion}`,
+      )
+      .join("\n");
+    throw new Error(
+      `Required global system exercises could not be resolved.\n${diagnosticList}\nRun npm run prisma:seed and retry.`,
+    );
+  }
+  return new Map(
+    exercises
+      .filter((exercise) => exercise.isSystem && exercise.userId === null)
+      .map((exercise) => [exercise.systemKey!, exercise]),
+  );
+}
+
 function distributeSets(day: DayDefinition, totalSets: number) {
   const counts = day.exercises.map((exercise) => exercise.sets);
   let remaining = Math.max(
@@ -350,7 +538,7 @@ function workingWeight(key: string, sessionIndex: number, setIndex: number) {
     {
       "incline-dumbbell-press": 36,
       "lat-pulldown": 75,
-      "leg-curl": 55,
+      "lying-leg-curl": 55,
       "leg-press": 220,
       "romanian-deadlift": 135,
     }[key] ??
@@ -389,37 +577,53 @@ async function main() {
             },
           }),
         ]);
-      if (nonDemoSessions || nonDemoPrograms || customExercises || nonDemoRecords) {
-        throw new Error(
-          "Target contains non-demo training data. Use a dedicated showcase account to avoid altering it.",
-        );
-      }
+      assertSafeDefaultSeedTarget({
+        customExercises,
+        nonDemoPrograms,
+        nonDemoRecords,
+        nonDemoSessions,
+      });
     }
-    const plans = args.reset ? [] : buildPlans();
+    let plans: SessionPlan[] = [];
     let projectedXp = 0;
     let projectedLevel = 0;
+    let projectedStreakMultiplier = 1;
+    let projectedStreakWeeks = 0;
     let targetTrophies: ReturnType<typeof getEligibleTrophies> = [];
     if (!args.reset) {
-      const existingXp = args.replaceExistingTarget
-        ? 0
-        : ((
-            await prisma.workoutSession.aggregate({
-              where: {
-                userId: user.id,
-                status: "COMPLETED",
-                clientReference: { not: { startsWith: DEMO_PREFIX } },
-              },
-              _sum: { earnedXp: true },
-            })
-          )._sum.earnedXp ?? 0);
-      if (existingXp >= totalXpRequiredForLevel(DEMO_LEVEL + 1)) {
+      const existingXp =
+        (
+          await prisma.workoutSession.aggregate({
+            where: {
+              userId: user.id,
+              status: "COMPLETED",
+              clientReference: { not: { startsWith: DEMO_PREFIX } },
+            },
+            _sum: { earnedXp: true },
+          })
+        )._sum.earnedXp ?? 0;
+      const startingXp = getSeedStartingXp({
+        existingXp,
+        replaceExistingTarget: args.replaceExistingTarget,
+      });
+      if (startingXp >= totalXpRequiredForLevel(DEMO_LEVEL + 1)) {
         throw new Error(
           "Target already exceeds the Level 55 demo range. Use a dedicated showcase account.",
         );
       }
-      projectedXp = tunePlans(plans, existingXp);
-      projectedLevel = getLevelProgress(projectedXp).current;
-      targetTrophies = getEligibleTrophies(projectedLevel);
+      const projection = createDemoProjection({
+        existingXp,
+        replaceExistingTarget: args.replaceExistingTarget,
+      });
+      plans = projection.plans;
+      projectedXp = projection.projectedXp;
+      projectedLevel = projection.projectedLevel;
+      projectedStreakMultiplier = projection.streakMultiplier;
+      projectedStreakWeeks = projection.streakWeeks;
+      targetTrophies = projection.targetTrophies;
+      // Resolve before the dry-run return and before any takeover cleanup so a
+      // failed catalog reports only safe identifiers without writing data.
+      await resolveRequiredSystemExercises(prisma);
     }
     const existingDemoSessions = await prisma.workoutSession.count({
       where: { userId: user.id, clientReference: { startsWith: DEMO_PREFIX } },
@@ -441,7 +645,7 @@ async function main() {
     }
     if (!args.reset) {
       console.log(
-        `Planned sessions: ${plans.length}; projected level: ${projectedLevel}; projected XP: ${projectedXp}`,
+        `Planned data: 2 programs, ${plans.length} sessions, ${Object.keys(prTargets).length} PRs, ${targetTrophies.length} trophies; projected level: ${projectedLevel}; projected XP: ${projectedXp}; streak: ${projectedStreakWeeks} weeks; multiplier: ${projectedStreakMultiplier}x.`,
       );
     }
     console.log(`Managed demo sessions currently present: ${existingDemoSessions}`);
@@ -449,11 +653,7 @@ async function main() {
 
     await prisma.$transaction(async (tx) => {
       if (args.replaceExistingTarget) {
-        await tx.personalRecord.deleteMany({ where: { userId: user.id } });
-        await tx.userTrophy.deleteMany({ where: { userId: user.id } });
-        await tx.workoutSession.deleteMany({ where: { userId: user.id } });
-        await tx.workoutProgram.deleteMany({ where: { userId: user.id } });
-        await tx.exercise.deleteMany({ where: { userId: user.id, isSystem: false } });
+        await runTakeoverCleanup({ dryRun: false, tx, userId: user.id });
       } else {
         await tx.workoutSession.deleteMany({
           where: { userId: user.id, clientReference: { startsWith: DEMO_PREFIX } },
@@ -464,23 +664,7 @@ async function main() {
       }
       if (args.reset) return;
 
-      const exerciseKeys = [
-        ...new Set(
-          days.flatMap((day) => day.exercises.map((exercise) => exercise.key)),
-        ),
-      ];
-      const exercises = await tx.exercise.findMany({
-        where: { isSystem: true, systemKey: { in: exerciseKeys } },
-        select: { id: true, name: true, muscleGroup: true, systemKey: true },
-      });
-      const exerciseByKey = new Map(
-        exercises.map((exercise) => [exercise.systemKey!, exercise]),
-      );
-      if (exerciseByKey.size !== exerciseKeys.length) {
-        throw new Error(
-          "Required system exercises are missing. Run npm run prisma:seed first.",
-        );
-      }
+      const exerciseByKey = await resolveRequiredSystemExercises(tx);
 
       await tx.user.update({
         where: { id: user.id },
@@ -681,7 +865,17 @@ async function main() {
   }
 }
 
-main().catch(() => {
-  console.error("Demo seed failed safely. Check target selection and configuration.");
-  process.exitCode = 1;
-});
+if (process.argv[1]?.endsWith("seed-demo-user.ts")) {
+  main().catch((error: unknown) => {
+    const message = error instanceof Error ? error.message : "Unknown failure.";
+    console.error(`Demo seed aborted:\n${redactSensitiveText(message)}`);
+    if (
+      process.env.NODE_ENV !== "production" &&
+      error instanceof Error &&
+      error.stack
+    ) {
+      console.error(`Stack trace:\n${redactSensitiveText(error.stack)}`);
+    }
+    process.exitCode = 1;
+  });
+}

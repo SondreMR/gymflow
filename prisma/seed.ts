@@ -3,15 +3,16 @@ import "dotenv/config";
 import { PrismaPg } from "@prisma/adapter-pg";
 
 import { PrismaClient } from "../src/generated/prisma/client";
+import { assertDemoExerciseDefinitions } from "../src/lib/system-exercises";
 
-type SystemExercise = {
+export type SystemExercise = {
   equipment: string;
   key: string;
   muscleGroup: string;
   name: string;
 };
 
-const systemExercises: SystemExercise[] = [
+export const systemExercises: SystemExercise[] = [
   {
     key: "incline-barbell-bench-press",
     name: "Incline Barbell Bench Press",
@@ -389,7 +390,8 @@ if (!connectionString)
 
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
-async function main() {
+export async function main() {
+  assertDemoExerciseDefinitions(systemExercises);
   const prExerciseKeys = new Set([
     "barbell-bench-press",
     "back-squat",
@@ -428,4 +430,6 @@ async function main() {
   );
 }
 
-main().finally(() => prisma.$disconnect());
+if (process.argv[1]?.endsWith("prisma/seed.ts")) {
+  main().finally(() => prisma.$disconnect());
+}
