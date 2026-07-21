@@ -5,6 +5,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import { useState } from "react";
 
 import { Logo } from "@/components/app-shell/logo";
+import { env } from "@/config/env";
 import { createClient } from "@/lib/supabase/client";
 
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
@@ -23,6 +24,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [busy, setBusy] = useState(false);
   const isSignup = mode === "sign-up";
   const next = params.get("next")?.startsWith("/") ? params.get("next")! : "/";
+  const callbackUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/auth/callback`;
 
   async function emailAuth(event: React.FormEvent) {
     event.preventDefault();
@@ -34,7 +36,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
           email,
           password,
           options: {
-            emailRedirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+            emailRedirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
           },
         })
       : await supabase.auth.signInWithPassword({ email, password });
@@ -58,7 +60,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
     const { error } = await createClient().auth.signInWithOAuth({
       provider: "google",
       options: {
-        redirectTo: `${window.location.origin}/auth/callback?next=${encodeURIComponent(next)}`,
+        redirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
       },
     });
     if (error) {
