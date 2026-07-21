@@ -22,7 +22,7 @@
     "test:unit": "tsx --test src/features/dashboard/dashboard-utils.test.ts src/features/progression/progression.test.ts src/lib/system-exercises.test.ts scripts/seed-demo-user.test.ts",
     "demo:level-100": "tsx scripts/set-prototype-level-100.ts",
     "seed:demo": "tsx scripts/seed-demo-user.ts",
-    "setup:screenshots": "tsx scripts/setup-screenshot-account.ts",
+    "screenshots:quick": "tsx scripts/quick-screenshot-data.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit"
