@@ -26,6 +26,7 @@ enum WeightUnit {
 
 model User {
   id                  String           @id @default(cuid())
+  authUserId          String?          @unique
   displayName         String           @default("GymFlow Athlete")
   avatarUrl           String?
   weeklyWorkoutGoal   Int              @default(4)

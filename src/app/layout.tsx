@@ -6,6 +6,7 @@ import { env } from "@/config/env";
 import { getProgramBootstrap } from "@/features/programs/data";
 import { ProgramStoreProvider } from "@/features/programs/program-store";
 import { getSidebarProfile } from "@/features/profile/data";
+import { getOptionalAuthUser } from "@/lib/auth";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -18,6 +19,14 @@ export const dynamic = "force-dynamic";
 type RootLayoutProps = Readonly<{ children: ReactNode }>;
 
 export default async function RootLayout({ children }: RootLayoutProps) {
+  const authUser = await getOptionalAuthUser();
+  if (!authUser) {
+    return (
+      <html lang="en">
+        <body>{children}</body>
+      </html>
+    );
+  }
   const [{ exercises, programs }, sidebarProfile] = await Promise.all([
     getProgramBootstrap(),
     getSidebarProfile(),

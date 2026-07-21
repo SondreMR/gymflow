@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { ensureProgramOwner, PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 type ProfileUpdate = {
@@ -21,7 +21,7 @@ function normalizeDisplayName(value: string) {
 }
 
 export async function updateProfileAction(update: ProfileUpdate) {
-  await ensureProgramOwner();
+  const user = await getCurrentUser();
   if (!Number.isInteger(update.weeklyWorkoutGoal)) {
     throw new Error("Weekly workout goal must be a whole number.");
   }
@@ -33,7 +33,7 @@ export async function updateProfileAction(update: ProfileUpdate) {
   }
 
   await prisma.user.update({
-    where: { id: PROGRAM_OWNER_ID },
+    where: { id: user.id },
     data: {
       displayName: normalizeDisplayName(update.displayName),
       preferredWeightUnit: update.preferredWeightUnit,

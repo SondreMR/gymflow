@@ -10,6 +10,7 @@ import { updateProfileAction } from "@/features/profile/actions";
 import { getInitials } from "@/features/profile/profile-utils";
 import type { ProfileData } from "@/features/profile/types";
 import { TrophyArt } from "@/features/profile/components/trophy-art";
+import { SignOutButton } from "@/features/auth/components/sign-out-button";
 
 type ProfileScreenProps = {
   profile: ProfileData;
@@ -89,11 +90,14 @@ export function ProfileScreen({ profile }: ProfileScreenProps) {
               </p>
             </div>
           </div>
-          <div className="rounded-xl bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
-            <span className="font-semibold text-lime-300">
-              {profile.currentWeekWorkouts}
-            </span>{" "}
-            of {profile.weeklyWorkoutGoal} workouts this week
+          <div className="flex items-center gap-3">
+            <div className="rounded-xl bg-white/[0.04] px-4 py-3 text-sm text-zinc-300">
+              <span className="font-semibold text-lime-300">
+                {profile.currentWeekWorkouts}
+              </span>{" "}
+              of {profile.weeklyWorkoutGoal} workouts this week
+            </div>
+            <SignOutButton />
           </div>
         </div>
         {profile.activeTrophy ? (

@@ -13,7 +13,7 @@ import {
   getStreakMultiplier,
 } from "@/features/progression/progression";
 import type { DashboardWorkoutRecord } from "@/features/dashboard/types";
-import { ensureProgramOwner, PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import type { ProfileData, SidebarProfile } from "@/features/profile/types";
 import { prisma } from "@/lib/prisma";
 
@@ -51,10 +51,10 @@ function toWorkoutRecord(session: {
 }
 
 export async function getProfileData(now = new Date()): Promise<ProfileData> {
-  await ensureProgramOwner();
+  const currentUser = await getCurrentUser();
   const [user, sessions] = await Promise.all([
     prisma.user.findUniqueOrThrow({
-      where: { id: PROGRAM_OWNER_ID },
+      where: { id: currentUser.id },
       select: {
         displayName: true,
         preferredWeightUnit: true,
@@ -62,7 +62,7 @@ export async function getProfileData(now = new Date()): Promise<ProfileData> {
       },
     }),
     prisma.workoutSession.findMany({
-      where: { status: "COMPLETED", userId: PROGRAM_OWNER_ID },
+      where: { status: "COMPLETED", userId: currentUser.id },
       select: {
         completedAt: true,
         durationSeconds: true,
@@ -87,7 +87,7 @@ export async function getProfileData(now = new Date()): Promise<ProfileData> {
   );
   await prisma.userTrophy.createMany({
     data: getEligibleTrophies(level.current).map((trophy) => ({
-      userId: PROGRAM_OWNER_ID,
+      userId: currentUser.id,
       trophyKey: trophy.key,
     })),
     skipDuplicates: true,

@@ -110,7 +110,7 @@ export function ActiveWorkout() {
       {isCanceling ? (
         <ConfirmDialog
           confirmLabel="Cancel workout"
-          description="Your logged sets in this prototype session will be discarded."
+          description="Your logged sets in this workout session will be discarded."
           onClose={() => setIsCanceling(false)}
           onConfirm={cancelWorkout}
           title="Cancel workout?"

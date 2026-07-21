@@ -92,7 +92,7 @@ export function ProgramCard({ program }: ProgramCardProps) {
       {isDeleting ? (
         <ConfirmDialog
           confirmLabel="Delete program"
-          description={`Delete ${program.name}? Its workout days will be removed from this prototype.`}
+          description={`Delete ${program.name}? Its workout days will be removed from your account.`}
           onClose={() => setIsDeleting(false)}
           onConfirm={() => deleteProgram(program.id)}
           title="Delete program"

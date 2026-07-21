@@ -1,6 +1,6 @@
 # GymFlow
 
-GymFlow is a fitness tracking web application in its foundation phase. This repository intentionally contains no product features, authentication, or database integration yet. It establishes the conventions and tooling needed to develop those capabilities safely over time.
+GymFlow is a fitness tracking app built with Next.js, Supabase Auth, PostgreSQL, and Prisma.
 
 ## Technology
 
@@ -26,7 +26,7 @@ cp .env.example .env.local
 npm run dev
 ```
 
-Open `http://localhost:3000`. The route is deliberately blank until product work begins.
+Open `http://localhost:3000` and sign in to access your training space.
 
 ## Scripts
 
@@ -62,10 +62,15 @@ The `src/` boundary prevents source code from mixing with configuration and repo
 
 Copy `.env.example` to `.env.local` for local development. The public environment variables currently provided are:
 
-| Variable               | Description                        |
-| ---------------------- | ---------------------------------- |
-| `NEXT_PUBLIC_APP_NAME` | Application name used in metadata. |
-| `NEXT_PUBLIC_APP_URL`  | Canonical local/deployment URL.    |
+| Variable                               | Description                                                                         |
+| -------------------------------------- | ----------------------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_NAME`                 | Application name used in metadata.                                                  |
+| `NEXT_PUBLIC_APP_URL`                  | Canonical local/deployment URL.                                                     |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project URL.                                                               |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase publishable/anon key.                                         |
+| `DATABASE_URL`                         | Server-only Prisma database connection.                                             |
+| `DIRECT_URL`                           | Direct database connection for Prisma CLI.                                          |
+| `SUPABASE_SERVICE_ROLE_KEY`            | Optional server-only administrative key; not required by normal app authentication. |
 
 Variables prefixed with `NEXT_PUBLIC_` are safe to expose to browser code and are embedded at build time. Never place secrets behind this prefix or commit `.env.local`. When server infrastructure is introduced, add its private environment contract separately and validate it at startup.
 
@@ -77,3 +82,9 @@ GitHub Actions runs formatting validation, linting, and type-checking for pushes
 
 - [Architecture](docs/architecture.md) explains the boundaries and technical decisions.
 - [Roadmap](docs/roadmap.md) outlines the deliberately staged path from this foundation to product delivery.
+
+# Authentication and legacy data
+
+GymFlow uses Supabase Auth (email/password and Google PKCE OAuth). Configure the Supabase URL, publishable key, database URL, and redirect URL (`http://localhost:3000/auth/callback` locally) before running. Every authenticated Supabase `user.id` is mapped once to `User.authUserId`; all application queries derive the internal user ID server-side.
+
+Existing prototype data remains intact on `gymflow-prototype-owner` after the migration. To assign it deliberately, sign in once with the intended account, then run `npm exec tsx scripts/assign-prototype-data.ts <supabase-auth-user-id>`. This moves programs, sessions, custom exercises, PRs, and trophies transactionally.

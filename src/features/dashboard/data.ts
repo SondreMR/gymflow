@@ -16,7 +16,7 @@ import type {
   DashboardRecentWorkout,
   DashboardWorkoutRecord,
 } from "@/features/dashboard/types";
-import { ensureProgramOwner, PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 const dateFormatter = new Intl.DateTimeFormat("en", {
@@ -73,10 +73,10 @@ function toRecentWorkout(workout: DashboardWorkoutRecord): DashboardRecentWorkou
 }
 
 export async function getDashboardData(now = new Date()): Promise<DashboardData> {
-  await ensureProgramOwner();
+  const currentUser = await getCurrentUser();
   const [sessions, user] = await Promise.all([
     prisma.workoutSession.findMany({
-      where: { status: "COMPLETED", userId: PROGRAM_OWNER_ID },
+      where: { status: "COMPLETED", userId: currentUser.id },
       orderBy: { completedAt: "desc" },
       select: {
         completedAt: true,
@@ -96,7 +96,7 @@ export async function getDashboardData(now = new Date()): Promise<DashboardData>
       },
     }),
     prisma.user.findUniqueOrThrow({
-      where: { id: PROGRAM_OWNER_ID },
+      where: { id: currentUser.id },
       select: {
         displayName: true,
         weeklyWorkoutGoal: true,

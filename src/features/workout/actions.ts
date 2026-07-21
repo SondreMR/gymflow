@@ -2,7 +2,7 @@
 
 import { revalidatePath } from "next/cache";
 
-import { ensureProgramOwner, PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import {
   getStartOfUtcWeek,
   getWeeklyGoalStreaksFromDates,
@@ -40,10 +40,10 @@ function assertPositiveInteger(value: number, field: string, maximum: number) {
     throw new Error(`${field} is invalid.`);
 }
 
-async function validateSources(workout: ActiveWorkout) {
+async function validateSources(workout: ActiveWorkout, userId: string) {
   if (workout.sourceProgramId) {
     const program = await prisma.workoutProgram.findFirst({
-      where: { id: workout.sourceProgramId, userId: PROGRAM_OWNER_ID },
+      where: { id: workout.sourceProgramId, userId },
       select: { id: true },
     });
     if (!program) throw new Error("Workout program is no longer available.");
@@ -52,7 +52,7 @@ async function validateSources(workout: ActiveWorkout) {
     const day = await prisma.workoutDay.findFirst({
       where: {
         id: workout.sourceWorkoutDayId,
-        program: { id: workout.sourceProgramId, userId: PROGRAM_OWNER_ID },
+        program: { id: workout.sourceProgramId, userId },
       },
       select: { id: true },
     });
@@ -66,7 +66,7 @@ async function validateSources(workout: ActiveWorkout) {
         id: { in: sourceExerciseIds },
         OR: [
           { isSystem: true, userId: null },
-          { userId: PROGRAM_OWNER_ID, isSystem: false },
+          { userId, isSystem: false },
         ],
       },
       select: { id: true },
@@ -141,11 +141,11 @@ export async function saveCompletedWorkoutAction(
   workout: ActiveWorkout,
 ): Promise<SavedWorkoutSummary> {
   validateWorkout(workout);
+  const currentUser = await getCurrentUser();
   const existing = await getSavedWorkoutSummary(workout.id);
   if (existing) return existing;
 
-  await ensureProgramOwner();
-  await validateSources(workout);
+  await validateSources(workout, currentUser.id);
   const completedAt = new Date();
   const startedAt = new Date(workout.startedAt);
   const durationSeconds = Math.max(
@@ -156,11 +156,11 @@ export async function saveCompletedWorkoutAction(
   try {
     const result = await prisma.$transaction(async (tx) => {
       const user = await tx.user.findUniqueOrThrow({
-        where: { id: PROGRAM_OWNER_ID },
+        where: { id: currentUser.id },
         select: { weeklyWorkoutGoal: true },
       });
       const previousSessions = await tx.workoutSession.findMany({
-        where: { userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+        where: { userId: currentUser.id, status: "COMPLETED" },
         select: { completedAt: true, startedAt: true },
       });
       const previousDates = previousSessions.map(
@@ -191,7 +191,7 @@ export async function saveCompletedWorkoutAction(
       const session = await tx.workoutSession.create({
         data: {
           clientReference: workout.id,
-          userId: PROGRAM_OWNER_ID,
+          userId: currentUser.id,
           sourceProgramId: workout.sourceProgramId,
           sourceWorkoutDayId: workout.sourceWorkoutDayId,
           programName: workout.programName || "Quick workout",
@@ -246,7 +246,7 @@ export async function saveCompletedWorkoutAction(
         const record = await tx.personalRecord.findUnique({
           where: {
             userId_exerciseId: {
-              userId: PROGRAM_OWNER_ID,
+              userId: currentUser.id,
               exerciseId: exercise.exerciseId,
             },
           },
@@ -254,7 +254,7 @@ export async function saveCompletedWorkoutAction(
         if (!record) {
           await tx.personalRecord.create({
             data: {
-              userId: PROGRAM_OWNER_ID,
+              userId: currentUser.id,
               exerciseId: exercise.exerciseId,
               currentWeight: highestWeight,
               workoutSessionId: session.id,
@@ -274,14 +274,14 @@ export async function saveCompletedWorkoutAction(
         }
       }
       const previousTotal = await tx.workoutSession.aggregate({
-        where: { userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+        where: { userId: currentUser.id, status: "COMPLETED" },
         _sum: { earnedXp: true },
       });
       const level = getLevelProgress(previousTotal._sum.earnedXp ?? 0);
       const trophies = getEligibleTrophies(level.current);
       await tx.userTrophy.createMany({
         data: trophies.map((trophy) => ({
-          userId: PROGRAM_OWNER_ID,
+          userId: currentUser.id,
           trophyKey: trophy.key,
         })),
         skipDuplicates: true,

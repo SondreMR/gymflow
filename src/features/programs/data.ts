@@ -1,13 +1,12 @@
 import "server-only";
 
 import { prisma } from "@/lib/prisma";
+import { getCurrentUser } from "@/lib/auth";
 import type {
   ProgramExercise,
   WorkoutDay,
   WorkoutProgram,
 } from "@/features/programs/types";
-
-export const PROGRAM_OWNER_ID = "gymflow-prototype-owner";
 
 function toUpdatedLabel(updatedAt: Date) {
   const secondsSinceUpdate = Math.max(
@@ -85,9 +84,10 @@ function toWorkoutProgram(program: {
 }
 
 export async function getProgramBootstrap() {
+  const user = await getCurrentUser();
   const [programs, exercises] = await Promise.all([
     prisma.workoutProgram.findMany({
-      where: { userId: PROGRAM_OWNER_ID },
+      where: { userId: user.id },
       orderBy: { updatedAt: "desc" },
       include: {
         days: {
@@ -105,7 +105,7 @@ export async function getProgramBootstrap() {
       where: {
         OR: [
           { isSystem: true, userId: null },
-          { userId: PROGRAM_OWNER_ID, isSystem: false },
+          { userId: user.id, isSystem: false },
         ],
       },
       orderBy: { name: "asc" },
@@ -131,17 +131,10 @@ export async function getProgramBootstrap() {
   };
 }
 
-export async function ensureProgramOwner() {
-  await prisma.user.upsert({
-    where: { id: PROGRAM_OWNER_ID },
-    update: {},
-    create: { id: PROGRAM_OWNER_ID },
-  });
-}
-
 export async function getProgramById(programId: string) {
+  const user = await getCurrentUser();
   const program = await prisma.workoutProgram.findFirst({
-    where: { id: programId, userId: PROGRAM_OWNER_ID },
+    where: { id: programId, userId: user.id },
     include: {
       days: {
         orderBy: { position: "asc" },

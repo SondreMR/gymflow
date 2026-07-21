@@ -1,6 +1,6 @@
 import "server-only";
 
-import { PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type {
   WorkoutHistoryDetail,
@@ -97,8 +97,9 @@ const sessionInclude = {
 } as const;
 
 export async function getWorkoutHistory() {
+  const user = await getCurrentUser();
   const sessions = await prisma.workoutSession.findMany({
-    where: { userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+    where: { userId: user.id, status: "COMPLETED" },
     orderBy: { completedAt: "desc" },
     take: 8,
     include: sessionInclude,
@@ -109,8 +110,9 @@ export async function getWorkoutHistory() {
 export async function getWorkoutHistoryDetail(
   sessionId: string,
 ): Promise<WorkoutHistoryDetail | undefined> {
+  const user = await getCurrentUser();
   const session = await prisma.workoutSession.findFirst({
-    where: { id: sessionId, userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+    where: { id: sessionId, userId: user.id, status: "COMPLETED" },
     include: sessionInclude,
   });
   if (!session) return undefined;
@@ -138,8 +140,9 @@ export async function getWorkoutHistoryDetail(
 }
 
 export async function getSavedWorkoutSummary(clientReference: string) {
+  const user = await getCurrentUser();
   const session = await prisma.workoutSession.findFirst({
-    where: { clientReference, userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+    where: { clientReference, userId: user.id, status: "COMPLETED" },
     include: sessionInclude,
   });
   return session ? toSummary(session) : undefined;

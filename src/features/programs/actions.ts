@@ -2,11 +2,8 @@
 
 import { revalidatePath } from "next/cache";
 
-import {
-  ensureProgramOwner,
-  getProgramById,
-  PROGRAM_OWNER_ID,
-} from "@/features/programs/data";
+import { getProgramById } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type {
   ExerciseDefinition,
@@ -41,28 +38,31 @@ function revalidatePrograms(programId?: string) {
 }
 
 async function requireProgram(programId: string) {
+  const user = await getCurrentUser();
   const program = await prisma.workoutProgram.findFirst({
-    where: { id: programId, userId: PROGRAM_OWNER_ID },
+    where: { id: programId, userId: user.id },
     select: { id: true },
   });
   if (!program) throw new Error("Program not found.");
 }
 
 async function requireWorkoutDay(programId: string, dayId: string) {
+  const user = await getCurrentUser();
   const day = await prisma.workoutDay.findFirst({
-    where: { id: dayId, programId, program: { userId: PROGRAM_OWNER_ID } },
+    where: { id: dayId, programId, program: { userId: user.id } },
     select: { id: true },
   });
   if (!day) throw new Error("Workout day not found.");
 }
 
 async function requireAvailableExercise(exerciseId: string) {
+  const user = await getCurrentUser();
   const exercise = await prisma.exercise.findFirst({
     where: {
       id: exerciseId,
       OR: [
         { isSystem: true, userId: null },
-        { isSystem: false, userId: PROGRAM_OWNER_ID },
+        { isSystem: false, userId: user.id },
       ],
     },
     select: { id: true },
@@ -71,10 +71,10 @@ async function requireAvailableExercise(exerciseId: string) {
 }
 
 export async function createProgramAction(draft: ProgramDraft) {
-  await ensureProgramOwner();
+  const user = await getCurrentUser();
   const program = await prisma.workoutProgram.create({
     data: {
-      userId: PROGRAM_OWNER_ID,
+      userId: user.id,
       name: normalizeName(draft.name, "Program name"),
       description: normalizeDescription(draft.description),
     },
@@ -97,13 +97,15 @@ export async function updateProgramAction(programId: string, draft: ProgramDraft
 }
 
 export async function deleteProgramAction(programId: string) {
+  const user = await getCurrentUser();
   await prisma.workoutProgram.deleteMany({
-    where: { id: programId, userId: PROGRAM_OWNER_ID },
+    where: { id: programId, userId: user.id },
   });
   revalidatePrograms(programId);
 }
 
 export async function duplicateProgramAction(programId: string) {
+  const user = await getCurrentUser();
   await requireProgram(programId);
   const source = await prisma.workoutProgram.findUniqueOrThrow({
     where: { id: programId },
@@ -116,7 +118,7 @@ export async function duplicateProgramAction(programId: string) {
   });
   const duplicate = await prisma.workoutProgram.create({
     data: {
-      userId: PROGRAM_OWNER_ID,
+      userId: user.id,
       name: `${source.name} copy`,
       description: source.description,
       days: {
@@ -187,14 +189,14 @@ export async function createExerciseAction(
   name: string,
   muscleGroup: string,
 ): Promise<ExerciseDefinition> {
-  await ensureProgramOwner();
+  const user = await getCurrentUser();
   const normalizedName = normalizeName(name, "Exercise name");
   const normalizedMuscleGroup = normalizeName(muscleGroup, "Muscle group");
   const exercise = await prisma.exercise.upsert({
-    where: { userId_name: { userId: PROGRAM_OWNER_ID, name: normalizedName } },
+    where: { userId_name: { userId: user.id, name: normalizedName } },
     update: { muscleGroup: normalizeName(muscleGroup, "Muscle group") },
     create: {
-      userId: PROGRAM_OWNER_ID,
+      userId: user.id,
       name: normalizedName,
       muscleGroup: normalizedMuscleGroup,
       isSystem: false,

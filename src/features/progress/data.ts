@@ -1,11 +1,12 @@
 import "server-only";
 
-import { PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 
 export async function getPersonalRecords() {
+  const user = await getCurrentUser();
   return prisma.personalRecord.findMany({
-    where: { userId: PROGRAM_OWNER_ID },
+    where: { userId: user.id },
     orderBy: { achievedAt: "desc" },
     include: { exercise: { select: { name: true } } },
   });

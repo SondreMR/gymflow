@@ -1,16 +1,16 @@
 import "server-only";
 
 import { TROPHIES } from "@/features/progression/progression";
-import { ensureProgramOwner, PROGRAM_OWNER_ID } from "@/features/programs/data";
+import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getProfileData } from "@/features/profile/data";
 
 export async function getAchievementsData() {
-  await ensureProgramOwner();
+  const user = await getCurrentUser();
   const [profile, unlocked] = await Promise.all([
     getProfileData(),
     prisma.userTrophy.findMany({
-      where: { userId: PROGRAM_OWNER_ID },
+      where: { userId: user.id },
       select: { trophyKey: true, unlockedAt: true },
     }),
   ]);
