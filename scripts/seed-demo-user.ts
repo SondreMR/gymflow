@@ -23,9 +23,11 @@ const WEEKLY_GOAL = 5;
 
 type Arguments = {
   authUserId?: string;
+  authUserIdFromArgument: boolean;
   confirm: boolean;
   dryRun: boolean;
   email?: string;
+  replaceExistingTarget: boolean;
   reset: boolean;
 };
 
@@ -104,12 +106,19 @@ function usage() {
   return [
     "Usage: npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --confirm [--dry-run] [--reset]",
     "   or: npm run seed:demo -- --email <email> --confirm [--dry-run] [--reset]",
+    "Takeover: npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --replace-existing-target --confirm",
     "Environment alternatives: DEMO_AUTH_USER_ID or DEMO_USER_EMAIL.",
   ].join("\n");
 }
 
 function parseArguments(argv: string[]): Arguments {
-  const values: Arguments = { confirm: false, dryRun: false, reset: false };
+  const values: Arguments = {
+    authUserIdFromArgument: false,
+    confirm: false,
+    dryRun: false,
+    replaceExistingTarget: false,
+    reset: false,
+  };
   for (let index = 0; index < argv.length; index += 1) {
     const argument = argv[index];
     if (argument === "--help" || argument === "-h") {
@@ -120,8 +129,12 @@ function parseArguments(argv: string[]): Arguments {
     else if (argument === "--dry-run") values.dryRun = true;
     else if (argument === "--reset") values.reset = true;
     else if (argument === "--email") values.email = argv[++index];
-    else if (argument === "--auth-user-id") values.authUserId = argv[++index];
-    else throw new Error(`Unknown argument: ${argument}`);
+    else if (argument === "--auth-user-id") {
+      values.authUserId = argv[++index];
+      values.authUserIdFromArgument = true;
+    } else if (argument === "--replace-existing-target") {
+      values.replaceExistingTarget = true;
+    } else throw new Error(`Unknown argument: ${argument}`);
   }
   values.email ??= process.env.DEMO_USER_EMAIL;
   values.authUserId ??= process.env.DEMO_AUTH_USER_ID;
@@ -132,6 +145,16 @@ function parseArguments(argv: string[]): Arguments {
     throw new Error(
       "Refusing to write demo data without --confirm. Use --dry-run first.",
     );
+  }
+  if (values.replaceExistingTarget) {
+    if (values.email || !values.authUserIdFromArgument || !values.authUserId) {
+      throw new Error(
+        "Takeover requires exactly one explicit --auth-user-id and cannot use --email.",
+      );
+    }
+    if (values.reset) {
+      throw new Error("Use either --reset or --replace-existing-target, not both.");
+    }
   }
   return values;
 }
@@ -263,12 +286,49 @@ async function findTargetUser(prisma: PrismaClient, args: Arguments) {
     if (!authUserId)
       throw new Error("No Supabase Auth user matches the supplied email.");
   }
-  const user = await prisma.user.findUnique({ where: { authUserId } });
-  if (!user)
+  const users = await prisma.user.findMany({ where: { authUserId } });
+  if (users.length !== 1)
     throw new Error(
-      "The target has no GymFlow User record. Sign in once before seeding.",
+      "The selected Supabase Auth ID must map to exactly one GymFlow User. Sign in once before seeding.",
     );
-  return user;
+  return users[0];
+}
+
+async function getTargetDataSummary(prisma: PrismaClient, userId: string) {
+  const [
+    personalRecords,
+    programs,
+    sessionExercises,
+    sessions,
+    sets,
+    trophies,
+    workoutDayExercises,
+    workoutDays,
+    customExercises,
+  ] = await Promise.all([
+    prisma.personalRecord.count({ where: { userId } }),
+    prisma.workoutProgram.count({ where: { userId } }),
+    prisma.workoutSessionExercise.count({ where: { workoutSession: { userId } } }),
+    prisma.workoutSession.count({ where: { userId } }),
+    prisma.workoutSet.count({
+      where: { workoutSessionExercise: { workoutSession: { userId } } },
+    }),
+    prisma.userTrophy.count({ where: { userId } }),
+    prisma.workoutDayExercise.count({ where: { workoutDay: { program: { userId } } } }),
+    prisma.workoutDay.count({ where: { program: { userId } } }),
+    prisma.exercise.count({ where: { userId, isSystem: false } }),
+  ]);
+  return {
+    customExercises,
+    personalRecords,
+    programs,
+    sessionExercises,
+    sessions,
+    sets,
+    trophies,
+    workoutDayExercises,
+    workoutDays,
+  };
 }
 
 function distributeSets(day: DayDefinition, totalSets: number) {
@@ -306,7 +366,7 @@ async function main() {
   const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
   try {
     const user = await findTargetUser(prisma, args);
-    if (!args.reset) {
+    if (!args.reset && !args.replaceExistingTarget) {
       const [nonDemoSessions, nonDemoPrograms, customExercises, nonDemoRecords] =
         await Promise.all([
           prisma.workoutSession.count({
@@ -340,15 +400,18 @@ async function main() {
     let projectedLevel = 0;
     let targetTrophies: ReturnType<typeof getEligibleTrophies> = [];
     if (!args.reset) {
-      const existing = await prisma.workoutSession.aggregate({
-        where: {
-          userId: user.id,
-          status: "COMPLETED",
-          clientReference: { not: { startsWith: DEMO_PREFIX } },
-        },
-        _sum: { earnedXp: true },
-      });
-      const existingXp = existing._sum.earnedXp ?? 0;
+      const existingXp = args.replaceExistingTarget
+        ? 0
+        : ((
+            await prisma.workoutSession.aggregate({
+              where: {
+                userId: user.id,
+                status: "COMPLETED",
+                clientReference: { not: { startsWith: DEMO_PREFIX } },
+              },
+              _sum: { earnedXp: true },
+            })
+          )._sum.earnedXp ?? 0);
       if (existingXp >= totalXpRequiredForLevel(DEMO_LEVEL + 1)) {
         throw new Error(
           "Target already exceeds the Level 55 demo range. Use a dedicated showcase account.",
@@ -364,7 +427,18 @@ async function main() {
     console.log(
       `Target: ${args.email ? "email-selected user" : "auth-user-id-selected user"}`,
     );
-    console.log(`Mode: ${args.dryRun ? "dry run" : args.reset ? "reset" : "seed"}`);
+    console.log(
+      `Mode: ${args.dryRun ? "dry run" : args.reset ? "reset" : args.replaceExistingTarget ? "replace existing target" : "seed"}`,
+    );
+    if (args.replaceExistingTarget) {
+      const summary = await getTargetDataSummary(prisma, user.id);
+      console.log(
+        `Target-owned data to remove: ${summary.sessions} sessions, ${summary.sessionExercises} session exercises, ${summary.sets} sets, ${summary.programs} programs, ${summary.workoutDays} workout days, ${summary.workoutDayExercises} day exercises, ${summary.customExercises} custom exercises, ${summary.personalRecords} personal records, ${summary.trophies} trophies.`,
+      );
+      console.log(
+        "Global system exercises and Supabase Auth identities are preserved.",
+      );
+    }
     if (!args.reset) {
       console.log(
         `Planned sessions: ${plans.length}; projected level: ${projectedLevel}; projected XP: ${projectedXp}`,
@@ -374,12 +448,20 @@ async function main() {
     if (args.dryRun) return;
 
     await prisma.$transaction(async (tx) => {
-      await tx.workoutSession.deleteMany({
-        where: { userId: user.id, clientReference: { startsWith: DEMO_PREFIX } },
-      });
-      await tx.workoutProgram.deleteMany({
-        where: { userId: user.id, description: DEMO_DESCRIPTION },
-      });
+      if (args.replaceExistingTarget) {
+        await tx.personalRecord.deleteMany({ where: { userId: user.id } });
+        await tx.userTrophy.deleteMany({ where: { userId: user.id } });
+        await tx.workoutSession.deleteMany({ where: { userId: user.id } });
+        await tx.workoutProgram.deleteMany({ where: { userId: user.id } });
+        await tx.exercise.deleteMany({ where: { userId: user.id, isSystem: false } });
+      } else {
+        await tx.workoutSession.deleteMany({
+          where: { userId: user.id, clientReference: { startsWith: DEMO_PREFIX } },
+        });
+        await tx.workoutProgram.deleteMany({
+          where: { userId: user.id, description: DEMO_DESCRIPTION },
+        });
+      }
       if (args.reset) return;
 
       const exerciseKeys = [

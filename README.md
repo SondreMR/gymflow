@@ -88,6 +88,15 @@ The script is idempotent: it replaces only its own demo-marked programs and sess
 npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --reset --confirm
 ```
 
+To deliberately convert one existing **test** account into the showcase account, use the separate takeover mode. It is unavailable to email targeting, requires the explicit Supabase Auth user ID, and prints its target-owned deletion summary before it writes:
+
+```bash
+npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --replace-existing-target --dry-run
+npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --replace-existing-target --confirm
+```
+
+Takeover deletes only that mapped GymFlow user’s programs/days, sessions/sets, private custom exercises, PRs, and trophies before generating the demo data. It preserves system exercises, all other GymFlow users, and every Supabase Auth identity.
+
 For production, run the command manually from a trusted environment with that production database configuration; it is never invoked by the application, deployment, or migration workflow. Do not put production credentials in Git.
 
 ## Documentation
