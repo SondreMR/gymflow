@@ -8,18 +8,61 @@ import { Logo } from "@/components/app-shell/logo";
 import { env } from "@/config/env";
 import { createClient } from "@/lib/supabase/client";
 
+type AuthFeedback = { message: string; type: "error" | "success" };
+
+type SupabaseErrorLike = {
+  code?: string;
+  message?: string;
+  status?: number;
+};
+
+function reportAuthError(operation: string, error: SupabaseErrorLike) {
+  console.warn(`Supabase ${operation} failed`, {
+    code: error.code ?? "unknown",
+    status: error.status ?? "unknown",
+  });
+}
+
+function getSignupErrorMessage(error: SupabaseErrorLike) {
+  const code = error.code?.toLowerCase() ?? "";
+  const message = error.message?.toLowerCase() ?? "";
+  if (
+    code.includes("already_exists") ||
+    code.includes("email_exists") ||
+    message.includes("already registered")
+  ) {
+    return "If an account can be created for that email, check your inbox for next steps.";
+  }
+  if (error.status === 429 || code.includes("rate") || message.includes("rate limit")) {
+    return "Too many sign-up attempts. Please wait a few minutes and try again.";
+  }
+  if (code.includes("email") || message.includes("valid email")) {
+    return "Enter a valid email address and try again.";
+  }
+  if (code.includes("weak_password") || message.includes("password")) {
+    return "Choose a stronger password and try again.";
+  }
+  if (code.includes("signup") || message.includes("signups not allowed")) {
+    return "Email sign-up is not available right now. Please try again later.";
+  }
+  return "We could not create your account. Please try again.";
+}
+
 export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const router = useRouter();
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const callbackError = params.get("error");
-  const [message, setMessage] = useState(
+  const [feedback, setFeedback] = useState<AuthFeedback | undefined>(
     callbackError === "cancelled"
-      ? "Google sign-in was cancelled."
+      ? { type: "error", message: "Google sign-in was cancelled." }
       : callbackError === "oauth"
-        ? "Google sign-in could not be completed. Please try again."
-        : "",
+        ? {
+            type: "error",
+            message: "Google sign-in could not be completed. Please try again.",
+          }
+        : undefined,
   );
   const [busy, setBusy] = useState(false);
   const isSignup = mode === "sign-up";
@@ -29,43 +72,87 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   async function emailAuth(event: React.FormEvent) {
     event.preventDefault();
     setBusy(true);
-    setMessage("");
-    const supabase = createClient();
-    const result = isSignup
-      ? await supabase.auth.signUp({
-          email,
-          password,
-          options: {
-            emailRedirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
-          },
-        })
-      : await supabase.auth.signInWithPassword({ email, password });
-    setBusy(false);
-    if (result.error) {
-      return setMessage(
-        isSignup
-          ? "We could not create your account. Check your details and try again."
-          : "We could not sign you in. Check your email and password and try again.",
-      );
+    setFeedback(undefined);
+    try {
+      const supabase = createClient();
+      const result = isSignup
+        ? await supabase.auth.signUp({
+            email,
+            password,
+            options: {
+              emailRedirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
+            },
+          })
+        : await supabase.auth.signInWithPassword({ email, password });
+      if (result.error) {
+        reportAuthError(isSignup ? "sign-up" : "sign-in", result.error);
+        setFeedback({
+          type: "error",
+          message: isSignup
+            ? getSignupErrorMessage(result.error)
+            : "We could not sign you in. Check your email and password and try again.",
+        });
+        return;
+      }
+      if (isSignup) {
+        const isObfuscatedExistingUser = result.data.user?.identities?.length === 0;
+        if (!result.data.user || isObfuscatedExistingUser) {
+          // Keep Supabase's account-enumeration protection intact.
+          setFeedback({
+            type: "success",
+            message:
+              "If an account can be created for that email, check your inbox for next steps.",
+          });
+          return;
+        }
+        if (!result.data.session) {
+          setFeedback({
+            type: "success",
+            message: "Check your email to confirm your account, then sign in.",
+          });
+          return;
+        }
+      }
+      router.replace(next);
+      router.refresh();
+    } catch (error) {
+      const safeError = error as SupabaseErrorLike;
+      reportAuthError(isSignup ? "sign-up" : "sign-in", safeError);
+      setFeedback({
+        type: "error",
+        message: isSignup
+          ? "We could not reach the sign-up service. Please try again."
+          : "We could not sign you in. Please try again.",
+      });
+    } finally {
+      setBusy(false);
     }
-    if (isSignup && !result.data.session)
-      return setMessage("Check your email to confirm your account, then sign in.");
-    router.replace(next);
-    router.refresh();
   }
 
   async function googleAuth() {
     setBusy(true);
-    setMessage("");
-    const { error } = await createClient().auth.signInWithOAuth({
-      provider: "google",
-      options: {
-        redirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
-      },
-    });
-    if (error) {
+    setFeedback(undefined);
+    try {
+      const { error } = await createClient().auth.signInWithOAuth({
+        provider: "google",
+        options: {
+          redirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
+        },
+      });
+      if (!error) return;
+      reportAuthError("Google OAuth", error);
       setBusy(false);
-      setMessage("Google sign-in could not be started. Please try again.");
+      setFeedback({
+        type: "error",
+        message: "Google sign-in could not be started. Please try again.",
+      });
+    } catch (error) {
+      reportAuthError("Google OAuth", error as SupabaseErrorLike);
+      setBusy(false);
+      setFeedback({
+        type: "error",
+        message: "Google sign-in could not be started. Please try again.",
+      });
     }
   }
 
@@ -124,9 +211,12 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
               value={password}
             />
           </label>
-          {message ? (
-            <p className="text-sm text-red-300" role="alert">
-              {message}
+          {feedback ? (
+            <p
+              className={`text-sm ${feedback.type === "success" ? "text-lime-300" : "text-red-300"}`}
+              role={feedback.type === "error" ? "alert" : "status"}
+            >
+              {feedback.message}
             </p>
           ) : null}
           <button
