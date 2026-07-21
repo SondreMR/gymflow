@@ -1,90 +1,80 @@
 # GymFlow
 
-GymFlow is a fitness tracking app built with Next.js, Supabase Auth, PostgreSQL, and Prisma.
+**GymFlow** is a deployed full-stack fitness tracker for planning workouts, logging training, and following progress over time. It uses authenticated, per-user data so each athlete has a private training space.
+
+**Live demo:** [gymflow-90eh.vercel.app](https://gymflow-90eh.vercel.app)
+
+Sign in with Google or create an email/password account to get started.
+
+## Features
+
+- Google OAuth with PKCE, email/password sign-up and confirmation, sign-in, sign-out, and persisted sessions
+- Private workout programs, ordered workout days, global exercise library, and private custom exercises
+- Workout logging with persisted sessions, sets, history, duplicate-submission protection, and personal-record updates
+- Dashboard statistics, recent workouts, weekly goals, UTC weekly streaks, XP multipliers, levels, trophies, and active achievements
+- Profile settings for display name, weekly workout goal, and preferred weight unit
+- Responsive dark GymFlow UI with accessible navigation, dialogs, mutation feedback, and empty states
 
 ## Technology
 
-- Next.js 15 with the App Router and React 19
-- TypeScript in strict mode
-- Tailwind CSS 4 for styling primitives
-- ESLint with Next.js Core Web Vitals and TypeScript rules
-- Prettier, including deterministic Tailwind class sorting
-- GitHub Actions for formatting, linting, and type-checking on every pull request
+- Next.js 15 App Router, React 19, and TypeScript
+- Tailwind CSS and Lucide icons
+- Supabase Auth and Supabase-hosted PostgreSQL
+- Prisma 7 with PostgreSQL adapter
+- ESLint, Prettier, and Node’s test runner via `tsx`
+- Vercel deployment from `main`
 
-## Getting started
+## Architecture
 
-### Prerequisites
+The browser uses Next.js App Router pages and client components for interaction. Server Components, Server Actions, and route handlers resolve the authenticated user, enforce ownership, and use Prisma to persist data in Supabase PostgreSQL. See [Architecture](docs/architecture.md) for the authentication, authorization, persistence, and deployment flows.
 
-- Node.js 20.9 or newer (Node 22 is used in CI)
-- npm 10 or newer
+## Local setup
 
-### Install and run
+Prerequisites: Node.js 20.9+ and npm 10+.
 
 ```bash
+git clone https://github.com/SondreMR/gymflow.git
+cd gymflow
 npm install
 cp .env.example .env.local
+```
+
+Set the following values in `.env.local`:
+
+| Variable                               | Purpose                                                                |
+| -------------------------------------- | ---------------------------------------------------------------------- |
+| `NEXT_PUBLIC_APP_NAME`                 | Optional display name; defaults to `GymFlow`.                          |
+| `NEXT_PUBLIC_APP_URL`                  | Local or deployed application URL; used to construct `/auth/callback`. |
+| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project URL.                                                  |
+| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase publishable key.                                 |
+| `DATABASE_URL`                         | Server-only Prisma runtime connection string.                          |
+| `DIRECT_URL`                           | Direct PostgreSQL connection for Prisma CLI and migrations.            |
+
+`npm install` runs `prisma generate` through `postinstall`. Apply pending migrations to a development database when appropriate, then start the app:
+
+```bash
+npm run prisma:migrate
 npm run dev
 ```
 
-Open `http://localhost:3000` and sign in to access your training space.
+For Google OAuth, configure the provider in Supabase and add `${NEXT_PUBLIC_APP_URL}/auth/callback` to Supabase Auth Redirect URLs. In production, `NEXT_PUBLIC_APP_URL` must be the production app URL.
 
-## Scripts
+Never commit `.env.local`, database URLs containing passwords, OAuth client secrets, or Supabase secret/service-role keys. `NEXT_PUBLIC_` values are embedded in the client bundle; only browser-safe values belong there.
 
-| Command                | Purpose                                     |
-| ---------------------- | ------------------------------------------- |
-| `npm run dev`          | Start the local development server.         |
-| `npm run build`        | Create an optimized production build.       |
-| `npm run start`        | Serve the production build.                 |
-| `npm run lint`         | Run ESLint.                                 |
-| `npm run lint:fix`     | Apply safe ESLint fixes.                    |
-| `npm run format`       | Format repository files with Prettier.      |
-| `npm run format:check` | Verify formatting without modifying files.  |
-| `npm run typecheck`    | Validate TypeScript without emitting files. |
+## Validation
 
-## Project structure
-
-```text
-src/
-  app/          App Router routes, layouts, and route-local UI
-  components/   Shared, reusable presentation components
-  config/       Typed application configuration and environment access
-  features/     Feature modules, added only when a capability is introduced
-  lib/          Framework-agnostic utilities and service clients
-  styles/       Global styles and Tailwind entry point
-  types/        Shared TypeScript types
-docs/           Living architecture and product-planning documents
-.github/        Continuous-integration workflows
+```bash
+npm run format:check
+npm run lint
+npm run typecheck
+npm run test:unit
+npm run build
 ```
-
-The `src/` boundary prevents source code from mixing with configuration and repository assets. Use `@/` for imports from `src` (for example, `@/components/button`). Keep a feature's UI, logic, and types together under `src/features/<feature>` once it exists; promote code to `components`, `lib`, or `types` only when it is truly shared.
-
-## Environment variables
-
-Copy `.env.example` to `.env.local` for local development. The public environment variables currently provided are:
-
-| Variable                               | Description                                                                         |
-| -------------------------------------- | ----------------------------------------------------------------------------------- |
-| `NEXT_PUBLIC_APP_NAME`                 | Application name used in metadata.                                                  |
-| `NEXT_PUBLIC_APP_URL`                  | Canonical local/deployment URL.                                                     |
-| `NEXT_PUBLIC_SUPABASE_URL`             | Supabase project URL.                                                               |
-| `NEXT_PUBLIC_SUPABASE_PUBLISHABLE_KEY` | Browser-safe Supabase publishable/anon key.                                         |
-| `DATABASE_URL`                         | Server-only Prisma database connection.                                             |
-| `DIRECT_URL`                           | Direct database connection for Prisma CLI.                                          |
-| `SUPABASE_SERVICE_ROLE_KEY`            | Optional server-only administrative key; not required by normal app authentication. |
-
-Variables prefixed with `NEXT_PUBLIC_` are safe to expose to browser code and are embedded at build time. Never place secrets behind this prefix or commit `.env.local`. When server infrastructure is introduced, add its private environment contract separately and validate it at startup.
-
-## Quality gates
-
-GitHub Actions runs formatting validation, linting, and type-checking for pushes to `main` and pull requests. Run the same commands locally before opening a pull request.
 
 ## Documentation
 
-- [Architecture](docs/architecture.md) explains the boundaries and technical decisions.
-- [Roadmap](docs/roadmap.md) outlines the deliberately staged path from this foundation to product delivery.
-
-# Authentication and legacy data
-
-GymFlow uses Supabase Auth (email/password and Google PKCE OAuth). Configure the Supabase URL, publishable key, database URL, and redirect URL (`http://localhost:3000/auth/callback` locally) before running. Every authenticated Supabase `user.id` is mapped once to `User.authUserId`; all application queries derive the internal user ID server-side.
-
-Existing prototype data remains intact on `gymflow-prototype-owner` after the migration. To assign it deliberately, sign in once with the intended account, then run `npm exec tsx scripts/assign-prototype-data.ts <supabase-auth-user-id>`. This moves programs, sessions, custom exercises, PRs, and trophies transactionally.
+- [Architecture](docs/architecture.md)
+- [Data model](docs/data-model.md)
+- [Dashboard metrics](docs/dashboard-metrics.md)
+- [Progression](docs/progression.md)
+- [Roadmap](docs/roadmap.md)

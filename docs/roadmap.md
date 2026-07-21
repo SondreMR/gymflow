@@ -1,36 +1,37 @@
 # Roadmap
 
-This roadmap intentionally separates foundational work from product implementation. No later phase is implied to be approved by the current codebase.
+This roadmap is directional. It records the implemented foundation and identifies next areas of work without promising dates.
 
-## Phase 0 — Foundation (complete)
+## Completed foundation
 
-- Next.js 15, React 19, TypeScript, and Tailwind CSS configured
-- Scalable `src/` layout and `@/` absolute imports established
-- Environment-file conventions and public configuration entry point added
-- ESLint, Prettier, and GitHub Actions quality checks configured
-- Architecture and delivery roadmap documented
+- Next.js App Router, React, TypeScript, Tailwind, Prisma, Supabase PostgreSQL, Vercel deployment, and CI checks
+- Supabase Auth with email/password sign-up and confirmation, Google OAuth with PKCE, sign-in, sign-out, and persisted sessions
+- Middleware-protected routes and automatic mapping from Supabase Auth identities to application users
+- Server-side per-user ownership checks for programs, exercises, workout history, profile, XP, trophies, and PRs
+- Global system exercise library and private custom exercises
+- Workout programs, ordered days, exercise prescriptions, persisted workouts and sets, history, and duplicate-submission safeguards
+- Profile settings, weekly goals, dashboard metrics, XP, levels, weekly streaks, multipliers, trophies, and compound-lift PRs
+- Responsive application shell, empty states, mutation feedback, focus-managed dialogs, and existing unit tests for dashboard/progression rules
 
-## Phase 1 — Product discovery (not started)
+## Current stabilization and presentation work
 
-- Define supported training workflows and core terminology
-- Establish accessibility, responsive-design, privacy, and performance requirements
-- Identify analytics and data-retention expectations
-- Convert decisions into small, prioritised product slices
+- Portfolio presentation, representative demo content, and screenshots captured from the deployed app
+- Cross-device/mobile verification and accessibility review of real user flows
+- Production monitoring, error review, and deployment/configuration checks
+- Keep public documentation aligned with implementation
+- Add targeted integration or authorization tests where they offer meaningful coverage
 
-## Phase 2 — Application capabilities (not started)
+## Near-term possibilities
 
-- Introduce route and feature modules only after product-slice approval
-- Establish a component and design-token system as repeated UI patterns emerge
-- Add automated tests alongside the first behavior with acceptance criteria
+- Richer progress analytics and visual trends
+- Exercise library search, metadata, and workout-builder polish
+- Improvements to the active workout flow and history exploration
+- AI coach experiments with explicit usage limits, cost controls, and user-facing boundaries
 
-## Phase 3 — Platform services (not started)
+## Longer-term ideas
 
-- Select and document authentication only when account requirements are defined
-- Select and document persistence only when data ownership and retention are defined
-- Add server-only environment validation, observability, and deployment configuration
+- Advanced analytics and personal insights
+- Social, sharing, or coaching collaboration features
+- Premium or subscription ideas
 
-## Phase 4 — Operational maturity (not started)
-
-- Expand CI with tests and production-build verification
-- Add release, incident-response, dependency-update, and security-review practices
-- Define performance budgets and accessibility regression checks
+AI, advanced analytics, social features, and premium capabilities are future work, not present product commitments.

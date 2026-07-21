@@ -1,54 +1,84 @@
 # Architecture
 
-## Current scope
+GymFlow is a Next.js App Router application with Supabase Auth, Prisma, and Supabase-hosted PostgreSQL. It is deployed on Vercel from the GitHub `main` branch.
 
-This is a frontend foundation, not a product implementation. It contains the application shell, conventions, quality tooling, and delivery automation only. Authentication, persistence, domain models, API routes, and fitness-tracking workflows are explicitly out of scope at this stage.
-
-## Design decisions
-
-### Next.js App Router
-
-The App Router is the routing and rendering boundary. It supports server-first rendering by default and gives future work clear homes for layouts, route handlers, loading states, and error boundaries. No routes beyond the root shell are created until there is a product need.
-
-### Strict TypeScript
-
-`strict` mode, no JavaScript source, and no emitted type-check output make invalid states more visible before runtime. Types should remain close to the owning feature until they are shared across features.
-
-### Feature-oriented organization
-
-`src/features` is reserved for vertical feature modules. A new feature should own its UI, hooks, schemas, and domain-specific types. `src/components` is only for reusable UI; `src/lib` is only for shared, non-UI utilities. This limits cross-feature coupling as the product grows.
-
-### Absolute imports
-
-`@/*` maps to `src/*`. This avoids fragile relative paths and makes module ownership obvious in imports. Relative imports remain appropriate within a small, cohesive feature folder.
-
-### Styling
-
-Tailwind CSS is imported once through `src/styles/globals.css`. Tailwind keeps styling colocated with components without creating a large global stylesheet. Design tokens and shared primitives should be introduced before product pages need them, rather than speculatively.
-
-### Configuration and secrets
-
-`src/config/env.ts` centralizes current public configuration. `.env.local` is ignored and `.env.example` documents non-sensitive keys. Public variables are intentionally limited: any `NEXT_PUBLIC_` value is shipped to browsers. Future server-only configuration must not be imported into client components.
-
-### Quality and delivery
-
-ESLint combines Next.js Core Web Vitals and TypeScript guidance. Prettier owns formatting so reviews focus on behavior. The CI workflow executes formatting checks, linting, and type-checking in a clean Node 22 environment, matching the project engine policy.
-
-## Dependency direction
+## Request and data flow
 
 ```text
-app routes/layouts
-        |
-        +--> features (when introduced) --> components / lib / types
-        |
-        +--> config
+Browser
+  → Next.js App Router
+    → Server Components / Server Actions / route handlers
+      → authentication and authorization helpers
+        → Prisma
+          → Supabase PostgreSQL
 ```
 
-Shared layers must not import feature modules or route modules. This one-way dependency rule prevents circular dependencies and keeps features independently understandable.
+Client components own local interaction state, forms, dialogs, and workout-entry state. They receive serializable DTOs and invoke Server Actions; they do not import Prisma. Server-only modules (`src/lib/prisma.ts`, `src/lib/auth.ts`, feature data modules, and actions) perform database access and authorization.
 
-## Conventions for future work
+## Authentication and sessions
 
-1. Add a feature module only when a user-facing capability is approved.
-2. Keep server concerns, schemas, and data access behind feature or service boundaries.
-3. Add a test strategy with the first behavior that needs it; do not introduce a test framework without an executable test case.
-4. Document material architectural changes in this file and update the roadmap when scope changes.
+Supabase Auth supports email/password accounts and Google OAuth. The browser uses the Supabase browser client; server rendering and route handlers use the server client with cookies.
+
+1. A user signs in with Google or email/password.
+2. Supabase establishes the identity and provides a stable Supabase Auth user ID.
+3. `getCurrentUser` verifies that identity server-side and upserts the application `User` by its unique `authUserId`.
+4. The resulting Prisma `User.id` is the internal ownership key used by application queries.
+5. Session cookies are refreshed and persisted by `src/middleware.ts` and used by server-side Supabase clients on later requests.
+
+Unauthenticated application requests are redirected to `/auth/sign-in`; authenticated visitors to `/auth/*` are redirected to the dashboard. `getCurrentUser` also redirects server-rendered protected work as a defense-in-depth fallback.
+
+### Google OAuth in production
+
+```text
+GymFlow
+  → Google
+    → Supabase OAuth callback
+      → GymFlow /auth/callback?code=...
+        → exchangeCodeForSession
+          → session cookies
+            → protected dashboard
+```
+
+`signInWithOAuth` constructs `redirectTo` from `NEXT_PUBLIC_APP_URL` and appends `/auth/callback`. The callback route validates the presence of `code`, exchanges it with `exchangeCodeForSession`, writes session cookies, and redirects to a safe in-app destination. Supabase Auth must allow that callback URL.
+
+## Authorization and ownership
+
+The client never supplies a trusted owner ID. Every user-owned query derives its user ID from the verified server-side session. Program, workout history, profile, progress, trophy, and personal-record queries are scoped to that internal ID.
+
+Nested resources are checked through their owning chain: workout days through programs, day exercises through days, session source programs/days/exercises through the current user, and session sets through the session transaction. System exercises (`isSystem`) are readable by all authenticated users; custom exercises are filtered to their owner. This authorization is implemented in application queries and actions; this repository does not document Prisma access as Supabase RLS enforcement.
+
+## Domain boundaries
+
+| Folder                                    | Responsibility                                                        |
+| ----------------------------------------- | --------------------------------------------------------------------- |
+| `src/features/auth`                       | Sign-in/up UI and sign-out behavior.                                  |
+| `src/features/programs`                   | Programs, days, exercise library, program actions, and client store.  |
+| `src/features/workout`                    | Active workout state, logging, persistence, history, and summaries.   |
+| `src/features/dashboard`                  | Aggregated workout metrics, weekly activity, and recent workouts.     |
+| `src/features/profile`                    | Profile settings, sidebar identity, and achievements.                 |
+| `src/features/progress` and `progression` | PR queries plus XP, levels, streaks, and trophy rules.                |
+| `src/lib`                                 | Server-only Prisma, Supabase server client, and current-user helpers. |
+| `src/app`                                 | App Router pages, layouts, and the `/auth/callback` route handler.    |
+
+## Persistence
+
+Prisma models in `prisma/schema.prisma` persist:
+
+- `User`: Supabase mapping (`authUserId`) and profile settings
+- `WorkoutProgram`, `WorkoutDay`, and `WorkoutDayExercise`: reusable plans and ordered prescriptions
+- `Exercise`: global system exercises and private custom exercises
+- `WorkoutSession`, `WorkoutSessionExercise`, and `WorkoutSet`: completed workout snapshots and logged sets
+- `UserTrophy`: unlocked achievement keys
+- `PersonalRecord`: per-user, per-exercise highest loaded set and its source session
+
+XP breakdown, duration, weekly-goal bonus, and streak multiplier are saved on completed sessions. Dashboard/profile calculations read persisted completed sessions. Trophies are idempotently inserted with a unique user/trophy constraint.
+
+## Reliability safeguards
+
+Workout completion uses a database transaction. A unique `WorkoutSession.clientReference` makes repeated client submissions return the existing completed summary rather than award duplicate XP. Server actions validate input and ownership before mutating. Client dialogs await mutations, prevent duplicate confirmation/submission, preserve inputs after errors, and provide safe user-facing feedback.
+
+## Deployment and configuration
+
+GitHub `main` deploys to Vercel. Vercel runs `npm install`; `postinstall` runs `prisma generate`, producing the intentionally git-ignored custom client at `src/generated/prisma` before `next build` resolves it. Supabase provides both Auth and PostgreSQL.
+
+Required runtime configuration is documented in [`.env.example`](../.env.example). Environment values live outside Git. `DATABASE_URL`, `DIRECT_URL`, service-role keys, and OAuth client secrets are server-only; the Supabase URL and publishable key are intentionally public client configuration.
