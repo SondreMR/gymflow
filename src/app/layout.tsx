@@ -3,6 +3,7 @@ import type { ReactNode } from "react";
 
 import { env } from "@/config/env";
 import { ProgramStoreProvider } from "@/features/programs/program-store";
+import { WorkoutStoreProvider } from "@/features/workout/workout-store";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -16,7 +17,9 @@ export default function RootLayout({ children }: RootLayoutProps) {
   return (
     <html lang="en">
       <body>
-        <ProgramStoreProvider>{children}</ProgramStoreProvider>
+        <ProgramStoreProvider>
+          <WorkoutStoreProvider>{children}</WorkoutStoreProvider>
+        </ProgramStoreProvider>
       </body>
     </html>
   );

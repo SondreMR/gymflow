@@ -1,10 +1,5 @@
-import { PlaceholderPage } from "@/components/app-shell/placeholder-page";
+import { WorkoutExperience } from "@/features/workout/components/workout-experience";
 
 export default function WorkoutPage() {
-  return (
-    <PlaceholderPage
-      description="Build and begin your next training session here."
-      title="Workout"
-    />
-  );
+  return <WorkoutExperience />;
 }
