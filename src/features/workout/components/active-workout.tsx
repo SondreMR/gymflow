@@ -10,7 +10,7 @@ import { WorkoutExerciseCard } from "@/features/workout/components/workout-exerc
 import { useWorkoutStore } from "@/features/workout/workout-store";
 
 export function ActiveWorkout() {
-  const { activeWorkout, cancelWorkout, finishWorkout } = useWorkoutStore();
+  const { activeWorkout, cancelWorkout, finishWorkout, isSaving } = useWorkoutStore();
   const [isCanceling, setIsCanceling] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [restStartedAt, setRestStartedAt] = useState<number | null>(null);
@@ -27,7 +27,7 @@ export function ActiveWorkout() {
     minute: "2-digit",
   }).format(activeWorkout.startedAt);
 
-  function requestFinish() {
+  async function requestFinish() {
     if (incompleteSets) setIsFinishing(true);
     else finishWorkout();
   }
@@ -90,15 +90,20 @@ export function ActiveWorkout() {
         <div className="flex flex-col gap-3 border-t border-white/[0.08] pt-5 sm:flex-row sm:justify-between">
           <Button
             className="min-h-12 text-zinc-400 hover:text-red-300 sm:order-1"
+            disabled={isSaving}
             onClick={() => setIsCanceling(true)}
             variant="ghost"
           >
             <X aria-hidden="true" size={17} />
             Cancel workout
           </Button>
-          <Button className="min-h-12 sm:order-2" onClick={requestFinish}>
+          <Button
+            className="min-h-12 sm:order-2"
+            disabled={isSaving}
+            onClick={requestFinish}
+          >
             <CircleStop aria-hidden="true" size={17} />
-            Finish workout
+            {isSaving ? "Saving workout…" : "Finish workout"}
           </Button>
         </div>
       </div>

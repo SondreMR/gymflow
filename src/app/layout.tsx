@@ -4,6 +4,7 @@ import type { ReactNode } from "react";
 import { env } from "@/config/env";
 import { getProgramBootstrap } from "@/features/programs/data";
 import { ProgramStoreProvider } from "@/features/programs/program-store";
+import { getWorkoutHistory } from "@/features/workout/data";
 import { WorkoutStoreProvider } from "@/features/workout/workout-store";
 import "@/styles/globals.css";
 
@@ -17,13 +18,18 @@ export const dynamic = "force-dynamic";
 type RootLayoutProps = Readonly<{ children: ReactNode }>;
 
 export default async function RootLayout({ children }: RootLayoutProps) {
-  const { exercises, programs } = await getProgramBootstrap();
+  const [{ exercises, programs }, history] = await Promise.all([
+    getProgramBootstrap(),
+    getWorkoutHistory(),
+  ]);
 
   return (
     <html lang="en">
       <body>
         <ProgramStoreProvider initialExercises={exercises} initialPrograms={programs}>
-          <WorkoutStoreProvider>{children}</WorkoutStoreProvider>
+          <WorkoutStoreProvider initialHistory={history}>
+            {children}
+          </WorkoutStoreProvider>
         </ProgramStoreProvider>
       </body>
     </html>

@@ -4,6 +4,7 @@ export type ActiveWorkoutExercise = {
   muscleGroup: string;
   name: string;
   note: string;
+  sourceDayExerciseId?: string;
   sets: WorkoutSetLog[];
   targetRepMax?: number;
   targetRepMin?: number;
@@ -13,6 +14,8 @@ export type ActiveWorkoutExercise = {
 export type ActiveWorkout = {
   exercises: ActiveWorkoutExercise[];
   id: string;
+  sourceProgramId?: string;
+  sourceWorkoutDayId?: string;
   programName?: string;
   startedAt: number;
   workoutDayName: string;
@@ -29,7 +32,28 @@ export type WorkoutSummary = {
   completedExercises: number;
   completedSets: number;
   durationSeconds: number;
+  programName?: string;
   totalVolume: number;
   workoutDayName: string;
   xpEarned: number;
+};
+
+export type SavedWorkoutSummary = WorkoutSummary & {
+  completedAt: string;
+  id: string;
+};
+
+export type WorkoutHistoryEntry = Omit<SavedWorkoutSummary, "xpEarned">;
+
+export type WorkoutHistoryDetail = WorkoutHistoryEntry & {
+  exercises: Array<{
+    id: string;
+    muscleGroup: string;
+    name: string;
+    note?: string;
+    sets: WorkoutSetLog[];
+    targetRepMax?: number;
+    targetRepMin?: number;
+    targetSets?: number;
+  }>;
 };

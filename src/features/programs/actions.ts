@@ -56,6 +56,20 @@ async function requireWorkoutDay(programId: string, dayId: string) {
   if (!day) throw new Error("Workout day not found.");
 }
 
+async function requireAvailableExercise(exerciseId: string) {
+  const exercise = await prisma.exercise.findFirst({
+    where: {
+      id: exerciseId,
+      OR: [
+        { isSystem: true, userId: null },
+        { isSystem: false, userId: PROGRAM_OWNER_ID },
+      ],
+    },
+    select: { id: true },
+  });
+  if (!exercise) throw new Error("Exercise not found.");
+}
+
 export async function createProgramAction(draft: ProgramDraft) {
   await ensureProgramOwner();
   const program = await prisma.workoutProgram.create({
@@ -202,11 +216,7 @@ export async function addExerciseToDayAction(
   exerciseId: string,
 ) {
   await requireWorkoutDay(programId, dayId);
-  const exercise = await prisma.exercise.findFirst({
-    where: { id: exerciseId, userId: PROGRAM_OWNER_ID },
-    select: { id: true },
-  });
-  if (!exercise) throw new Error("Exercise not found.");
+  await requireAvailableExercise(exerciseId);
   const position = await prisma.workoutDayExercise.count({
     where: { workoutDayId: dayId },
   });

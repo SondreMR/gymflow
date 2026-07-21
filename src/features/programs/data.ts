@@ -103,7 +103,10 @@ export async function getProgramBootstrap() {
     }),
     prisma.exercise.findMany({
       where: {
-        OR: [{ isSystem: true }, { userId: PROGRAM_OWNER_ID, isSystem: false }],
+        OR: [
+          { isSystem: true, userId: null },
+          { userId: PROGRAM_OWNER_ID, isSystem: false },
+        ],
       },
       orderBy: { name: "asc" },
       select: {

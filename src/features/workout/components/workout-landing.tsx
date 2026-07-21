@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AppShell } from "@/components/app-shell/app-shell";
 import { Button } from "@/components/ui/button";
 import { useProgramStore } from "@/features/programs/program-store";
+import { WorkoutHistory } from "@/features/workout/components/workout-history";
 import { useWorkoutStore } from "@/features/workout/workout-store";
 
 export function WorkoutLanding() {
@@ -124,6 +125,7 @@ export function WorkoutLanding() {
             </div>
           </section>
         )}
+        <WorkoutHistory />
       </div>
     </AppShell>
   );

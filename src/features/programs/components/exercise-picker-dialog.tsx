@@ -14,7 +14,7 @@ import type { ExerciseDefinition } from "@/features/programs/types";
 type ExercisePickerDialogProps = {
   existingExerciseIds: string[];
   onClose: () => void;
-  onSelect: (exercise: ExerciseDefinition) => void;
+  onSelect: (exercise: ExerciseDefinition) => Promise<void>;
 };
 
 export function ExercisePickerDialog({
@@ -30,6 +30,8 @@ export function ExercisePickerDialog({
   const [muscleGroup, setMuscleGroup] = useState("");
   const [selectedMuscleGroup, setSelectedMuscleGroup] = useState("All muscle groups");
   const [error, setError] = useState("");
+  const [selectionError, setSelectionError] = useState("");
+  const [isSelecting, setIsSelecting] = useState(false);
   const normalizedQuery = query.trim().toLowerCase();
   const muscleGroups = useMemo(
     () => Array.from(new Set(exercises.map((exercise) => exercise.muscleGroup))).sort(),
@@ -64,9 +66,19 @@ export function ExercisePickerDialog({
     [existingExerciseIds, exercises, normalizedQuery, selectedMuscleGroup],
   );
 
-  function selectExercise(exercise: ExerciseDefinition) {
-    onSelect(exercise);
-    onClose();
+  async function selectExercise(exercise: ExerciseDefinition) {
+    setSelectionError("");
+    setIsSelecting(true);
+    try {
+      await onSelect(exercise);
+      onClose();
+    } catch {
+      setSelectionError(
+        "This exercise is no longer available. Refresh the page and try again.",
+      );
+    } finally {
+      setIsSelecting(false);
+    }
   }
 
   async function createExercise(event: React.FormEvent<HTMLFormElement>) {
@@ -87,7 +99,11 @@ export function ExercisePickerDialog({
       setError("An exercise with this name is already available.");
       return;
     }
-    selectExercise(await createCustomExercise(trimmedName, trimmedMuscleGroup));
+    try {
+      await selectExercise(await createCustomExercise(trimmedName, trimmedMuscleGroup));
+    } catch {
+      setError("Unable to create this exercise. Please try again.");
+    }
   }
 
   return (
@@ -135,12 +151,18 @@ export function ExercisePickerDialog({
               value={muscleGroup}
             />
           </div>
-          {error ? <p className="text-sm text-red-300">{error}</p> : null}
+          {error ? (
+            <p className="text-sm text-red-300" role="alert">
+              {error}
+            </p>
+          ) : null}
           <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
             <Button onClick={() => setIsCreating(false)} variant="secondary">
               Back
             </Button>
-            <Button type="submit">Create and add</Button>
+            <Button disabled={isSelecting} type="submit">
+              Create and add
+            </Button>
           </div>
         </form>
       ) : (
@@ -173,6 +195,11 @@ export function ExercisePickerDialog({
               <option key={group}>{group}</option>
             ))}
           </select>
+          {selectionError ? (
+            <p className="mt-3 text-sm text-red-300" role="alert">
+              {selectionError}
+            </p>
+          ) : null}
           <div className="mt-4 max-h-72 space-y-1 overflow-y-auto pr-1">
             {availableExercises.length ? (
               availableExercises.map((exercise) => (
@@ -180,6 +207,7 @@ export function ExercisePickerDialog({
                   className="flex w-full items-center justify-between rounded-xl px-3 py-3 text-left transition-colors hover:bg-white/[0.06] focus-visible:outline-2 focus-visible:outline-lime-300"
                   key={exercise.id}
                   onClick={() => selectExercise(exercise)}
+                  disabled={isSelecting}
                   type="button"
                 >
                   <span>

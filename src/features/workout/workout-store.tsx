@@ -1,12 +1,14 @@
 "use client";
 
-import { createContext, useContext, useState } from "react";
+import { createContext, useContext, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { WorkoutDay, WorkoutProgram } from "@/features/programs/types";
+import { saveCompletedWorkoutAction } from "@/features/workout/actions";
 import type {
   ActiveWorkout,
   ActiveWorkoutExercise,
+  WorkoutHistoryEntry,
   WorkoutSetLog,
   WorkoutSummary,
 } from "@/features/workout/types";
@@ -15,7 +17,9 @@ type WorkoutStoreValue = {
   activeWorkout: ActiveWorkout | null;
   addSet: (exerciseId: string) => void;
   cancelWorkout: () => void;
-  finishWorkout: () => void;
+  finishWorkout: () => Promise<void>;
+  history: WorkoutHistoryEntry[];
+  isSaving: boolean;
   removeSet: (exerciseId: string, setId: string) => void;
   resetWorkout: () => void;
   startQuickWorkout: () => void;
@@ -41,6 +45,7 @@ function makeActiveExercise(
   return {
     id: createId("active-exercise"),
     exerciseId: exercise.exerciseId,
+    sourceDayExerciseId: exercise.id,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup,
     targetSets: exercise.targetSets,
@@ -65,14 +70,25 @@ function updateActiveExercise(
   };
 }
 
-export function WorkoutStoreProvider({ children }: { children: ReactNode }) {
+export function WorkoutStoreProvider({
+  children,
+  initialHistory,
+}: {
+  children: ReactNode;
+  initialHistory: WorkoutHistoryEntry[];
+}) {
   const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
   const [summary, setSummary] = useState<WorkoutSummary | null>(null);
+  const [history, setHistory] = useState<WorkoutHistoryEntry[]>(initialHistory);
+  const [isSaving, setIsSaving] = useState(false);
+  const isSubmitting = useRef(false);
 
   function startWorkout(program: WorkoutProgram, day: WorkoutDay) {
     setSummary(null);
     setActiveWorkout({
       id: createId("workout"),
+      sourceProgramId: program.id,
+      sourceWorkoutDayId: day.id,
       programName: program.name,
       workoutDayName: day.name,
       startedAt: Date.now(),
@@ -125,31 +141,32 @@ export function WorkoutStoreProvider({ children }: { children: ReactNode }) {
     );
   }
 
-  function finishWorkout() {
-    if (!activeWorkout) return;
-    const allSets = activeWorkout.exercises.flatMap((exercise) => exercise.sets);
-    const completedSets = allSets.filter((set) => set.completed);
-    const completedExercises = activeWorkout.exercises.filter((exercise) =>
-      exercise.sets.some((set) => set.completed),
-    ).length;
-    const totalVolume = completedSets.reduce(
-      (volume, set) => volume + (set.weightKg ?? 0) * (set.reps ?? 0),
-      0,
-    );
-    const durationSeconds = Math.max(
-      1,
-      Math.floor((Date.now() - activeWorkout.startedAt) / 1000),
-    );
-
-    setSummary({
-      workoutDayName: activeWorkout.workoutDayName,
-      durationSeconds,
-      completedSets: completedSets.length,
-      completedExercises,
-      totalVolume,
-      xpEarned: 100 + completedSets.length * 15,
-    });
-    setActiveWorkout(null);
+  async function finishWorkout() {
+    if (!activeWorkout || isSubmitting.current) return;
+    isSubmitting.current = true;
+    setIsSaving(true);
+    try {
+      const savedSummary = await saveCompletedWorkoutAction(activeWorkout);
+      setSummary(savedSummary);
+      setActiveWorkout(null);
+      const historyEntry: WorkoutHistoryEntry = {
+        id: savedSummary.id,
+        completedAt: savedSummary.completedAt,
+        workoutDayName: savedSummary.workoutDayName,
+        programName: savedSummary.programName,
+        durationSeconds: savedSummary.durationSeconds,
+        completedSets: savedSummary.completedSets,
+        completedExercises: savedSummary.completedExercises,
+        totalVolume: savedSummary.totalVolume,
+      };
+      setHistory((currentHistory) => [
+        historyEntry,
+        ...currentHistory.filter((entry) => entry.id !== historyEntry.id),
+      ]);
+    } finally {
+      isSubmitting.current = false;
+      setIsSaving(false);
+    }
   }
 
   function cancelWorkout() {
@@ -166,6 +183,8 @@ export function WorkoutStoreProvider({ children }: { children: ReactNode }) {
     <WorkoutStoreContext.Provider
       value={{
         activeWorkout,
+        history,
+        isSaving,
         summary,
         startWorkout,
         startQuickWorkout,

@@ -99,6 +99,7 @@ model WorkoutDayExercise {
 
 model WorkoutSession {
   id                 String                   @id @default(cuid())
+  clientReference    String?                  @unique
   userId             String
   sourceProgramId    String?
   sourceWorkoutDayId String?
@@ -107,6 +108,8 @@ model WorkoutSession {
   status             WorkoutSessionStatus     @default(ACTIVE)
   startedAt          DateTime                 @default(now())
   completedAt        DateTime?
+  durationSeconds    Int                      @default(0)
+  note               String?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
   user               User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -127,6 +130,7 @@ model WorkoutSessionExercise {
   targetSets          Int?
   targetRepMin        Int?
   targetRepMax        Int?
+  note                String?
   position            Int
   createdAt           DateTime            @default(now())
   updatedAt           DateTime            @updatedAt
