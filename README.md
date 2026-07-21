@@ -71,6 +71,25 @@ npm run test:unit
 npm run build
 ```
 
+## Showcase demo data
+
+The explicit demo seed creates artificial portfolio data for one **dedicated, already-authenticated** GymFlow account. It never selects a user implicitly and refuses to seed an account with non-demo training data.
+
+Preview the result first, then confirm the write using either the Supabase Auth user ID or, when a server-only Supabase service-role key is configured, the account email:
+
+```bash
+npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --dry-run
+npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --confirm
+```
+
+The script is idempotent: it replaces only its own demo-marked programs and sessions for that target. To remove those managed records without touching other users, run:
+
+```bash
+npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --reset --confirm
+```
+
+For production, run the command manually from a trusted environment with that production database configuration; it is never invoked by the application, deployment, or migration workflow. Do not put production credentials in Git.
+
 ## Documentation
 
 - [Architecture](docs/architecture.md)
