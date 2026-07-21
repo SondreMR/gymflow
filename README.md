@@ -6,6 +6,47 @@
 
 Sign in with Google or create an email/password account to get started.
 
+## Product Preview
+
+<p align="center">
+  <img src="docs/Screenshots/dashboard-overview.png" alt="GymFlow dashboard showing weekly activity, training volume, level, trophy and recent workouts" width="100%" />
+</p>
+
+<p align="center">
+  Personalized training dashboard with progression, weekly activity and recent workouts.
+</p>
+
+### Core Experience
+
+<table>
+  <tr>
+    <td width="50%">
+      <img src="docs/Screenshots/programs-page.png" alt="GymFlow workout programs page with Push Pull Legs and Upper Lower plans" />
+      <p align="center"><strong>Workout Programs</strong><br />Build and manage reusable training plans.</p>
+    </td>
+    <td width="50%">
+      <img src="docs/Screenshots/workout-start.png" alt="GymFlow workout start screen with selectable Upper Lower and Push Pull Legs workout days" />
+      <p align="center"><strong>Workout Flow</strong><br />Choose a planned day or start a quick workout.</p>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <img src="docs/Screenshots/progress-personal-records.png" alt="GymFlow progress page showing six compound-lift personal records" />
+      <p align="center"><strong>Progress &amp; Personal Records</strong><br />Track selected compound-lift milestones.</p>
+    </td>
+    <td width="50%">
+      <img src="docs/Screenshots/achievements-page.png" alt="GymFlow achievements page showing unlocked trophies through the Diamond Gym Veteran trophy" />
+      <p align="center"><strong>Achievements</strong><br />Unlock trophies as training progression grows.</p>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <img src="docs/Screenshots/workout-logging.png" alt="GymFlow workout logging interface with set, weight, rep and rest timer controls" />
+      <p align="center"><strong>Workout Logging</strong><br />Record sets, weights and reps during an active session.</p>
+    </td>
+  </tr>
+</table>
+
 ## Features
 
 - Google OAuth with PKCE, email/password sign-up and confirmation, sign-in, sign-out, and persisted sessions
@@ -15,7 +56,7 @@ Sign in with Google or create an email/password account to get started.
 - Profile settings for display name, weekly workout goal, and preferred weight unit
 - Responsive dark GymFlow UI with accessible navigation, dialogs, mutation feedback, and empty states
 
-## Technology
+## Tech stack
 
 - Next.js 15 App Router, React 19, and TypeScript
 - Tailwind CSS and Lucide icons
@@ -41,6 +82,8 @@ cp .env.example .env.local
 
 Set the following values in `.env.local`:
 
+## Environment variables
+
 | Variable                               | Purpose                                                                |
 | -------------------------------------- | ---------------------------------------------------------------------- |
 | `NEXT_PUBLIC_APP_NAME`                 | Optional display name; defaults to `GymFlow`.                          |
@@ -61,7 +104,7 @@ For Google OAuth, configure the provider in Supabase and add `${NEXT_PUBLIC_APP_
 
 Never commit `.env.local`, database URLs containing passwords, OAuth client secrets, or Supabase secret/service-role keys. `NEXT_PUBLIC_` values are embedded in the client bundle; only browser-safe values belong there.
 
-## Validation
+## Validation and testing
 
 ```bash
 npm run format:check
@@ -71,33 +114,9 @@ npm run test:unit
 npm run build
 ```
 
-## Showcase demo data
+## Roadmap
 
-The explicit demo seed creates artificial portfolio data for one **dedicated, already-authenticated** GymFlow account. It never selects a user implicitly and refuses to seed an account with non-demo training data.
-
-Preview the result first, then confirm the write using either the Supabase Auth user ID or, when a server-only Supabase service-role key is configured, the account email:
-
-```bash
-npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --dry-run
-npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --confirm
-```
-
-The script is idempotent: it replaces only its own demo-marked programs and sessions for that target. To remove those managed records without touching other users, run:
-
-```bash
-npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --reset --confirm
-```
-
-To deliberately convert one existing **test** account into the showcase account, use the separate takeover mode. It is unavailable to email targeting, requires the explicit Supabase Auth user ID, and prints its target-owned deletion summary before it writes:
-
-```bash
-npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --replace-existing-target --dry-run
-npm run seed:demo -- --auth-user-id <supabase-auth-user-id> --replace-existing-target --confirm
-```
-
-Takeover deletes only that mapped GymFlow user’s programs/days, sessions/sets, private custom exercises, PRs, and trophies before generating the demo data. It preserves system exercises, all other GymFlow users, and every Supabase Auth identity.
-
-For production, run the command manually from a trusted environment with that production database configuration; it is never invoked by the application, deployment, or migration workflow. Do not put production credentials in Git.
+See the [roadmap](docs/roadmap.md) for completed foundation work and future ideas.
 
 ## Documentation
 
