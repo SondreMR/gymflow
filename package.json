@@ -14,6 +14,7 @@
     "lint:fix": "eslint . --fix",
     "prisma:format": "prisma format",
     "prisma:generate": "prisma generate",
+    "postinstall": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
