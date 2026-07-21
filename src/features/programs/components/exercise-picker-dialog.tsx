@@ -48,7 +48,7 @@ export function ExercisePickerDialog({
     onClose();
   }
 
-  function createExercise(event: React.FormEvent<HTMLFormElement>) {
+  async function createExercise(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     const trimmedMuscleGroup = muscleGroup.trim();
@@ -64,7 +64,7 @@ export function ExercisePickerDialog({
       setError("An exercise with this name is already available.");
       return;
     }
-    selectExercise(createCustomExercise(trimmedName, trimmedMuscleGroup));
+    selectExercise(await createCustomExercise(trimmedName, trimmedMuscleGroup));
   }
 
   return (

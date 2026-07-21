@@ -52,6 +52,7 @@ model WorkoutProgram {
   userId      String
   name        String
   description String?
+  muscleGroup String?
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
