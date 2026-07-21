@@ -1,28 +1,25 @@
 import { ArrowUpRight, Clock3, Dumbbell } from "lucide-react";
 import Link from "next/link";
 
-const recentWorkouts = [
-  {
-    date: "Today",
-    duration: "54 min",
-    name: "Upper Body Strength",
-    volume: "4,280 kg",
-  },
-  {
-    date: "Fri, Jul 18",
-    duration: "48 min",
-    name: "Lower Body Power",
-    volume: "5,140 kg",
-  },
-  {
-    date: "Wed, Jul 16",
-    duration: "42 min",
-    name: "Push Hypertrophy",
-    volume: "3,060 kg",
-  },
-];
+import type { DashboardRecentWorkout } from "@/features/dashboard/types";
 
-export function RecentWorkouts() {
+type RecentWorkoutsProps = {
+  workouts: DashboardRecentWorkout[];
+};
+
+function formatDuration(durationSeconds: number) {
+  return `${Math.max(1, Math.round(durationSeconds / 60))} min`;
+}
+
+function formatDate(value: string) {
+  return new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "short",
+    timeZone: "UTC",
+  }).format(new Date(value));
+}
+
+export function RecentWorkouts({ workouts }: RecentWorkoutsProps) {
   return (
     <section
       aria-labelledby="recent-workouts-heading"
@@ -47,32 +44,53 @@ export function RecentWorkouts() {
           See all <ArrowUpRight aria-hidden="true" size={16} />
         </Link>
       </div>
-      <ul className="divide-y divide-white/[0.08]">
-        {recentWorkouts.map((workout) => (
-          <li
-            className="flex items-center gap-3 py-4 first:pt-0 last:pb-0"
-            key={workout.name}
-          >
-            <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-zinc-300">
-              <Dumbbell aria-hidden="true" size={18} />
-            </span>
-            <div className="min-w-0 flex-1">
-              <p className="truncate text-sm font-semibold text-zinc-100">
-                {workout.name}
-              </p>
-              <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
-                <Clock3 aria-hidden="true" size={13} />
-                <span>
-                  {workout.date} · {workout.duration}
+      {workouts.length ? (
+        <ul className="divide-y divide-white/[0.08]">
+          {workouts.map((workout) => (
+            <li key={workout.id}>
+              <Link
+                className="flex items-center gap-3 py-4 first:pt-0 last:pb-0 focus-visible:outline-2 focus-visible:outline-lime-300"
+                href={`/workout/history/${workout.id}`}
+              >
+                <span className="grid size-10 shrink-0 place-items-center rounded-xl bg-white/[0.05] text-zinc-300">
+                  <Dumbbell aria-hidden="true" size={18} />
                 </span>
-              </div>
-            </div>
-            <p className="text-right text-sm font-semibold text-zinc-300">
-              {workout.volume}
-            </p>
-          </li>
-        ))}
-      </ul>
+                <div className="min-w-0 flex-1">
+                  <p className="truncate text-sm font-semibold text-zinc-100">
+                    {workout.workoutDayName}
+                  </p>
+                  <p className="mt-1 truncate text-xs text-zinc-500">
+                    {workout.programName ?? "Quick workout"} · {workout.completedSets}{" "}
+                    sets
+                  </p>
+                  <div className="mt-1 flex items-center gap-1.5 text-xs text-zinc-500">
+                    <Clock3 aria-hidden="true" size={13} />
+                    <span>
+                      {formatDate(workout.completedAt)} ·{" "}
+                      {formatDuration(workout.durationSeconds)}
+                    </span>
+                  </div>
+                </div>
+                <p className="text-right text-sm font-semibold text-zinc-300">
+                  {workout.totalVolume.toLocaleString("en-US", {
+                    maximumFractionDigits: 2,
+                  })}{" "}
+                  kg
+                </p>
+              </Link>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <div className="rounded-xl border border-dashed border-white/[0.1] px-5 py-9 text-center">
+          <p className="text-sm font-semibold text-zinc-200">
+            No workouts completed yet
+          </p>
+          <p className="mt-2 text-sm leading-6 text-zinc-500">
+            Finish your first workout to see your recent training here.
+          </p>
+        </div>
+      )}
     </section>
   );
 }

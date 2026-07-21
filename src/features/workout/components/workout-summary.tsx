@@ -63,6 +63,23 @@ export function WorkoutSummary() {
             Earned today
           </p>
           <p className="mt-1 text-2xl font-bold text-white">+{summary.xpEarned} XP</p>
+          <div className="mt-3 grid grid-cols-2 gap-2 text-left text-xs text-zinc-400">
+            <p>
+              Base XP{" "}
+              <span className="font-semibold text-zinc-200">{summary.baseXp}</span>
+            </p>
+            <p>
+              Streak{" "}
+              <span className="font-semibold text-lime-300">
+                {summary.streakMultiplier.toFixed(2)}x
+              </span>
+            </p>
+            {summary.goalBonusXp ? (
+              <p className="col-span-2 font-semibold text-lime-300">
+                Weekly goal bonus +{summary.goalBonusXp} XP
+              </p>
+            ) : null}
+          </div>
         </div>
         <Button className="mt-7 min-h-12 w-full" onClick={resetWorkout}>
           <RotateCcw aria-hidden="true" size={17} />

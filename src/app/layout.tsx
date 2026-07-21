@@ -1,11 +1,11 @@
 import type { Metadata } from "next";
 import type { ReactNode } from "react";
 
+import { AppShellProfileProvider } from "@/components/app-shell/app-shell-profile-provider";
 import { env } from "@/config/env";
 import { getProgramBootstrap } from "@/features/programs/data";
 import { ProgramStoreProvider } from "@/features/programs/program-store";
-import { getWorkoutHistory } from "@/features/workout/data";
-import { WorkoutStoreProvider } from "@/features/workout/workout-store";
+import { getSidebarProfile } from "@/features/profile/data";
 import "@/styles/globals.css";
 
 export const metadata: Metadata = {
@@ -18,18 +18,18 @@ export const dynamic = "force-dynamic";
 type RootLayoutProps = Readonly<{ children: ReactNode }>;
 
 export default async function RootLayout({ children }: RootLayoutProps) {
-  const [{ exercises, programs }, history] = await Promise.all([
+  const [{ exercises, programs }, sidebarProfile] = await Promise.all([
     getProgramBootstrap(),
-    getWorkoutHistory(),
+    getSidebarProfile(),
   ]);
 
   return (
     <html lang="en">
       <body>
         <ProgramStoreProvider initialExercises={exercises} initialPrograms={programs}>
-          <WorkoutStoreProvider initialHistory={history}>
+          <AppShellProfileProvider profile={sidebarProfile}>
             {children}
-          </WorkoutStoreProvider>
+          </AppShellProfileProvider>
         </ProgramStoreProvider>
       </body>
     </html>

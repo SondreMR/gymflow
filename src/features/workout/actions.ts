@@ -3,6 +3,18 @@
 import { revalidatePath } from "next/cache";
 
 import { ensureProgramOwner, PROGRAM_OWNER_ID } from "@/features/programs/data";
+import {
+  getStartOfUtcWeek,
+  getWeeklyGoalStreaksFromDates,
+} from "@/features/dashboard/dashboard-utils";
+import {
+  calculateBaseXp,
+  calculateEarnedXp,
+  getEligibleTrophies,
+  getLevelProgress,
+  getStreakMultiplier,
+  WEEKLY_GOAL_BONUS_XP,
+} from "@/features/progression/progression";
 import { getSavedWorkoutSummary } from "@/features/workout/data";
 import { prisma } from "@/lib/prisma";
 import type { ActiveWorkout, SavedWorkoutSummary } from "@/features/workout/types";
@@ -142,8 +154,41 @@ export async function saveCompletedWorkoutAction(
   );
 
   try {
-    const session = await prisma.$transaction((tx) =>
-      tx.workoutSession.create({
+    const result = await prisma.$transaction(async (tx) => {
+      const user = await tx.user.findUniqueOrThrow({
+        where: { id: PROGRAM_OWNER_ID },
+        select: { weeklyWorkoutGoal: true },
+      });
+      const previousSessions = await tx.workoutSession.findMany({
+        where: { userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+        select: { completedAt: true, startedAt: true },
+      });
+      const previousDates = previousSessions.map(
+        (session) => session.completedAt ?? session.startedAt,
+      );
+      const afterStreak = getWeeklyGoalStreaksFromDates(
+        [...previousDates, completedAt],
+        user.weeklyWorkoutGoal,
+        completedAt,
+      );
+      const currentWeek = getStartOfUtcWeek(completedAt).getTime();
+      const workoutsBeforeThisWeek = previousDates.filter(
+        (date) => getStartOfUtcWeek(date).getTime() === currentWeek,
+      ).length;
+      const goalBonusXp =
+        workoutsBeforeThisWeek < user.weeklyWorkoutGoal &&
+        workoutsBeforeThisWeek + 1 >= user.weeklyWorkoutGoal
+          ? WEEKLY_GOAL_BONUS_XP
+          : 0;
+      const completedSets = workout.exercises.reduce(
+        (total, exercise) =>
+          total + exercise.sets.filter((set) => set.completed).length,
+        0,
+      );
+      const baseXp = calculateBaseXp(completedSets);
+      const streakMultiplier = getStreakMultiplier(afterStreak.current);
+      const earnedXp = calculateEarnedXp(baseXp, streakMultiplier, goalBonusXp);
+      const session = await tx.workoutSession.create({
         data: {
           clientReference: workout.id,
           userId: PROGRAM_OWNER_ID,
@@ -155,6 +200,10 @@ export async function saveCompletedWorkoutAction(
           startedAt,
           completedAt,
           durationSeconds,
+          baseXp,
+          streakMultiplier,
+          goalBonusXp,
+          earnedXp,
           exercises: {
             create: workout.exercises.map((exercise, exercisePosition) => ({
               sourceDayExerciseId: exercise.sourceDayExerciseId,
@@ -176,12 +225,77 @@ export async function saveCompletedWorkoutAction(
             })),
           },
         },
-      }),
+      });
+      const eligibleExercises = await tx.exercise.findMany({
+        where: {
+          id: { in: workout.exercises.map((exercise) => exercise.exerciseId) },
+          tracksPersonalRecords: true,
+        },
+        select: { id: true },
+      });
+      const eligibleIds = new Set(eligibleExercises.map((exercise) => exercise.id));
+      for (const exercise of workout.exercises) {
+        if (!eligibleIds.has(exercise.exerciseId)) continue;
+        const highestWeight = Math.max(
+          0,
+          ...exercise.sets
+            .filter((set) => set.completed && (set.weightKg ?? 0) > 0)
+            .map((set) => set.weightKg ?? 0),
+        );
+        if (!highestWeight) continue;
+        const record = await tx.personalRecord.findUnique({
+          where: {
+            userId_exerciseId: {
+              userId: PROGRAM_OWNER_ID,
+              exerciseId: exercise.exerciseId,
+            },
+          },
+        });
+        if (!record) {
+          await tx.personalRecord.create({
+            data: {
+              userId: PROGRAM_OWNER_ID,
+              exerciseId: exercise.exerciseId,
+              currentWeight: highestWeight,
+              workoutSessionId: session.id,
+              achievedAt: completedAt,
+            },
+          });
+        } else if (highestWeight > Number(record.currentWeight.toString())) {
+          await tx.personalRecord.update({
+            where: { id: record.id },
+            data: {
+              currentWeight: highestWeight,
+              previousWeight: record.currentWeight,
+              workoutSessionId: session.id,
+              achievedAt: completedAt,
+            },
+          });
+        }
+      }
+      const previousTotal = await tx.workoutSession.aggregate({
+        where: { userId: PROGRAM_OWNER_ID, status: "COMPLETED" },
+        _sum: { earnedXp: true },
+      });
+      const level = getLevelProgress(previousTotal._sum.earnedXp ?? 0);
+      const trophies = getEligibleTrophies(level.current);
+      await tx.userTrophy.createMany({
+        data: trophies.map((trophy) => ({
+          userId: PROGRAM_OWNER_ID,
+          trophyKey: trophy.key,
+        })),
+        skipDuplicates: true,
+      });
+      return { session, goalBonusXp, streakMultiplier };
+    });
+    const summary = await getSavedWorkoutSummary(
+      result.session.clientReference ?? workout.id,
     );
-    const summary = await getSavedWorkoutSummary(session.clientReference ?? workout.id);
     if (!summary) throw new Error("Completed workout could not be loaded.");
+    revalidatePath("/");
+    revalidatePath("/profile");
     revalidatePath("/workout");
-    revalidatePath(`/workout/history/${session.id}`);
+    revalidatePath(`/workout/history/${result.session.id}`);
     return summary;
   } catch (error) {
     const duplicate = await getSavedWorkoutSummary(workout.id);

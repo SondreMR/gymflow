@@ -18,6 +18,8 @@
     "prisma:seed": "prisma db seed",
     "prisma:studio": "prisma studio",
     "prisma:validate": "prisma validate",
+    "test:unit": "tsx --test src/features/dashboard/dashboard-utils.test.ts src/features/progression/progression.test.ts",
+    "demo:level-100": "tsx scripts/set-prototype-level-100.ts",
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "typecheck": "tsc --noEmit"

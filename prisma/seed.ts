@@ -13,6 +13,12 @@ type SystemExercise = {
 
 const systemExercises: SystemExercise[] = [
   {
+    key: "incline-barbell-bench-press",
+    name: "Incline Barbell Bench Press",
+    muscleGroup: "Chest",
+    equipment: "Barbell",
+  },
+  {
     key: "barbell-bench-press",
     name: "Bench Press",
     muscleGroup: "Chest",
@@ -56,6 +62,12 @@ const systemExercises: SystemExercise[] = [
     equipment: "Cable",
   },
   { key: "pull-up", name: "Pull-Up", muscleGroup: "Back", equipment: "Bodyweight" },
+  {
+    key: "weighted-pull-up",
+    name: "Weighted Pull-Up",
+    muscleGroup: "Back",
+    equipment: "Bodyweight",
+  },
   {
     key: "lat-pulldown",
     name: "Lat Pulldown",
@@ -198,6 +210,12 @@ const systemExercises: SystemExercise[] = [
     equipment: "Machine",
   },
   { key: "back-squat", name: "Squat", muscleGroup: "Quadriceps", equipment: "Barbell" },
+  {
+    key: "conventional-deadlift",
+    name: "Conventional Deadlift",
+    muscleGroup: "Hamstrings",
+    equipment: "Barbell",
+  },
   {
     key: "front-squat",
     name: "Front Squat",
@@ -372,6 +390,18 @@ if (!connectionString)
 const prisma = new PrismaClient({ adapter: new PrismaPg({ connectionString }) });
 
 async function main() {
+  const prExerciseKeys = new Set([
+    "barbell-bench-press",
+    "back-squat",
+    "conventional-deadlift",
+    "overhead-press",
+    "barbell-row",
+    "pull-up",
+    "weighted-pull-up",
+    "front-squat",
+    "romanian-deadlift",
+    "incline-barbell-bench-press",
+  ]);
   await prisma.$transaction(
     systemExercises.map((exercise) =>
       prisma.exercise.upsert({
@@ -383,6 +413,7 @@ async function main() {
           isSystem: true,
           userId: null,
           description: null,
+          tracksPersonalRecords: prExerciseKeys.has(exercise.key),
         },
         create: {
           systemKey: exercise.key,
@@ -390,6 +421,7 @@ async function main() {
           muscleGroup: exercise.muscleGroup,
           equipment: exercise.equipment,
           isSystem: true,
+          tracksPersonalRecords: prExerciseKeys.has(exercise.key),
         },
       }),
     ),

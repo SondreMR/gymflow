@@ -16,6 +16,10 @@ type SessionWithExercises = {
   completedAt: Date | null;
   startedAt: Date;
   durationSeconds: number;
+  baseXp: number;
+  streakMultiplier: { toString: () => string };
+  goalBonusXp: number;
+  earnedXp: number;
   exercises: Array<{
     id: string;
     exerciseName: string;
@@ -61,7 +65,10 @@ function toSummary(session: SessionWithExercises): SavedWorkoutSummary {
       exercise.sets.some((set) => set.isCompleted),
     ).length,
     totalVolume: getVolume(session),
-    xpEarned: 100 + sets.length * 15,
+    baseXp: session.baseXp,
+    streakMultiplier: Number(session.streakMultiplier.toString()),
+    goalBonusXp: session.goalBonusXp,
+    xpEarned: session.earnedXp,
   };
 }
 

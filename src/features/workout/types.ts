@@ -35,6 +35,9 @@ export type WorkoutSummary = {
   programName?: string;
   totalVolume: number;
   workoutDayName: string;
+  baseXp: number;
+  streakMultiplier: number;
+  goalBonusXp: number;
   xpEarned: number;
 };
 
@@ -43,7 +46,10 @@ export type SavedWorkoutSummary = WorkoutSummary & {
   id: string;
 };
 
-export type WorkoutHistoryEntry = Omit<SavedWorkoutSummary, "xpEarned">;
+export type WorkoutHistoryEntry = Omit<
+  SavedWorkoutSummary,
+  "baseXp" | "goalBonusXp" | "streakMultiplier" | "xpEarned"
+>;
 
 export type WorkoutHistoryDetail = WorkoutHistoryEntry & {
   exercises: Array<{

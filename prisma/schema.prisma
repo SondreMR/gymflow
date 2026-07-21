@@ -19,29 +19,42 @@ enum WorkoutSetKind {
   DROP
 }
 
+enum WeightUnit {
+  KG
+  LB
+}
+
 model User {
-  id              String           @id @default(cuid())
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
-  exercises       Exercise[]
-  programs        WorkoutProgram[]
-  workoutSessions WorkoutSession[]
+  id                  String           @id @default(cuid())
+  displayName         String           @default("GymFlow Athlete")
+  avatarUrl           String?
+  weeklyWorkoutGoal   Int              @default(4)
+  preferredWeightUnit WeightUnit       @default(KG)
+  createdAt           DateTime         @default(now())
+  updatedAt           DateTime         @updatedAt
+  exercises           Exercise[]
+  programs            WorkoutProgram[]
+  workoutSessions     WorkoutSession[]
+  trophies            UserTrophy[]
+  personalRecords     PersonalRecord[]
 }
 
 model Exercise {
-  id               String                   @id @default(cuid())
-  userId           String?
-  name             String
-  description      String?
-  muscleGroup      String?
-  equipment        String?
-  isSystem         Boolean                  @default(false)
-  systemKey        String?                  @unique
-  createdAt        DateTime                 @default(now())
-  updatedAt        DateTime                 @updatedAt
-  user             User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
-  workoutDayLinks  WorkoutDayExercise[]
-  sessionExercises WorkoutSessionExercise[]
+  id                    String                   @id @default(cuid())
+  userId                String?
+  name                  String
+  description           String?
+  muscleGroup           String?
+  equipment             String?
+  isSystem              Boolean                  @default(false)
+  tracksPersonalRecords Boolean                  @default(false)
+  systemKey             String?                  @unique
+  createdAt             DateTime                 @default(now())
+  updatedAt             DateTime                 @updatedAt
+  user                  User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  workoutDayLinks       WorkoutDayExercise[]
+  sessionExercises      WorkoutSessionExercise[]
+  personalRecords       PersonalRecord[]
 
   @@unique([userId, name])
   @@index([userId])
@@ -109,6 +122,10 @@ model WorkoutSession {
   startedAt          DateTime                 @default(now())
   completedAt        DateTime?
   durationSeconds    Int                      @default(0)
+  baseXp             Int                      @default(0)
+  streakMultiplier   Decimal                  @default(1.00) @db.Decimal(3, 2)
+  goalBonusXp        Int                      @default(0)
+  earnedXp           Int                      @default(0)
   note               String?
   createdAt          DateTime                 @default(now())
   updatedAt          DateTime                 @updatedAt
@@ -116,9 +133,37 @@ model WorkoutSession {
   sourceProgram      WorkoutProgram?          @relation(fields: [sourceProgramId], references: [id], onDelete: SetNull)
   sourceWorkoutDay   WorkoutDay?              @relation(fields: [sourceWorkoutDayId], references: [id], onDelete: SetNull)
   exercises          WorkoutSessionExercise[]
+  personalRecords    PersonalRecord[]
 
   @@index([userId, startedAt])
   @@index([sourceWorkoutDayId])
+}
+
+model UserTrophy {
+  id         String   @id @default(cuid())
+  userId     String
+  trophyKey  String
+  unlockedAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, trophyKey])
+  @@index([userId, unlockedAt])
+}
+
+model PersonalRecord {
+  id               String         @id @default(cuid())
+  userId           String
+  exerciseId       String
+  currentWeight    Decimal        @db.Decimal(7, 2)
+  previousWeight   Decimal?       @db.Decimal(7, 2)
+  workoutSessionId String
+  achievedAt       DateTime       @default(now())
+  user             User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  exercise         Exercise       @relation(fields: [exerciseId], references: [id], onDelete: Cascade)
+  workoutSession   WorkoutSession @relation(fields: [workoutSessionId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, exerciseId])
+  @@index([userId, achievedAt])
 }
 
 model WorkoutSessionExercise {
