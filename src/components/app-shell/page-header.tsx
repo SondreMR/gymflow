@@ -8,6 +8,11 @@ type PageHeaderProps = {
 };
 
 export function PageHeader({ actions, eyebrow, title }: PageHeaderProps) {
+  const today = new Intl.DateTimeFormat("en", {
+    day: "numeric",
+    month: "long",
+    weekday: "long",
+  }).format(new Date());
   return (
     <header className="flex min-h-20 items-center justify-between gap-4 border-b border-white/[0.08] py-4 sm:min-h-24 sm:py-5">
       <div>
@@ -21,7 +26,7 @@ export function PageHeader({ actions, eyebrow, title }: PageHeaderProps) {
       {actions ?? (
         <div className="hidden items-center gap-2 text-sm text-zinc-400 sm:flex">
           <CalendarDays aria-hidden="true" size={17} />
-          <span>Sunday, July 20</span>
+          <span>{today}</span>
         </div>
       )}
     </header>

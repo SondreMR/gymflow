@@ -12,8 +12,13 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const params = useSearchParams();
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const callbackError = params.get("error");
   const [message, setMessage] = useState(
-    params.get("error") === "cancelled" ? "Google sign-in was cancelled." : "",
+    callbackError === "cancelled"
+      ? "Google sign-in was cancelled."
+      : callbackError === "oauth"
+        ? "Google sign-in could not be completed. Please try again."
+        : "",
   );
   const [busy, setBusy] = useState(false);
   const isSignup = mode === "sign-up";
@@ -34,7 +39,13 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
         })
       : await supabase.auth.signInWithPassword({ email, password });
     setBusy(false);
-    if (result.error) return setMessage(result.error.message);
+    if (result.error) {
+      return setMessage(
+        isSignup
+          ? "We could not create your account. Check your details and try again."
+          : "We could not sign you in. Check your email and password and try again.",
+      );
+    }
     if (isSignup && !result.data.session)
       return setMessage("Check your email to confirm your account, then sign in.");
     router.replace(next);
@@ -112,7 +123,7 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
             />
           </label>
           {message ? (
-            <p className="text-sm text-red-300" role="status">
+            <p className="text-sm text-red-300" role="alert">
               {message}
             </p>
           ) : null}

@@ -8,7 +8,7 @@ import { Dialog } from "@/features/programs/components/dialog";
 type DayFormDialogProps = {
   initialName?: string;
   onClose: () => void;
-  onSubmit: (name: string) => void;
+  onSubmit: (name: string) => Promise<void>;
   title: string;
 };
 
@@ -20,16 +20,24 @@ export function DayFormDialog({
 }: DayFormDialogProps) {
   const [name, setName] = useState(initialName);
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Workout day name is required.");
       return;
     }
-    onSubmit(trimmedName);
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onSubmit(trimmedName);
+      onClose();
+    } catch {
+      setError("We could not save this workout day. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -59,10 +67,12 @@ export function DayFormDialog({
           ) : null}
         </div>
         <div className="flex flex-col-reverse gap-3 sm:flex-row sm:justify-end">
-          <Button onClick={onClose} variant="secondary">
+          <Button disabled={isSubmitting} onClick={onClose} variant="secondary">
             Cancel
           </Button>
-          <Button type="submit">Save workout day</Button>
+          <Button disabled={isSubmitting} type="submit">
+            {isSubmitting ? "Saving…" : "Save workout day"}
+          </Button>
         </div>
       </form>
     </Dialog>

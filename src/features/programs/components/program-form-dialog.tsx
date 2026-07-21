@@ -8,7 +8,7 @@ import type { WorkoutProgram } from "@/features/programs/types";
 
 type ProgramFormDialogProps = {
   onClose: () => void;
-  onSubmit: (draft: Pick<WorkoutProgram, "description" | "name">) => void;
+  onSubmit: (draft: Pick<WorkoutProgram, "description" | "name">) => Promise<void>;
   program?: WorkoutProgram;
 };
 
@@ -20,17 +20,25 @@ export function ProgramFormDialog({
   const [name, setName] = useState(program?.name ?? "");
   const [description, setDescription] = useState(program?.description ?? "");
   const [error, setError] = useState("");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const isEditing = Boolean(program);
 
-  function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
+  async function handleSubmit(event: React.FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const trimmedName = name.trim();
     if (!trimmedName) {
       setError("Give your program a name before continuing.");
       return;
     }
-    onSubmit({ name: trimmedName, description: description.trim() });
-    onClose();
+    setIsSubmitting(true);
+    try {
+      await onSubmit({ name: trimmedName, description: description.trim() });
+      onClose();
+    } catch {
+      setError("We could not save this program. Please try again.");
+    } finally {
+      setIsSubmitting(false);
+    }
   }
 
   return (
@@ -80,10 +88,12 @@ export function ProgramFormDialog({
           />
         </div>
         <div className="flex flex-col-reverse gap-3 pt-1 sm:flex-row sm:justify-end">
-          <Button onClick={onClose} variant="secondary">
+          <Button disabled={isSubmitting} onClick={onClose} variant="secondary">
             Cancel
           </Button>
-          <Button type="submit">{isEditing ? "Save changes" : "Create program"}</Button>
+          <Button disabled={isSubmitting} type="submit">
+            {isSubmitting ? "Saving…" : isEditing ? "Save changes" : "Create program"}
+          </Button>
         </div>
       </form>
     </Dialog>

@@ -10,7 +10,8 @@ import { WorkoutExerciseCard } from "@/features/workout/components/workout-exerc
 import { useWorkoutStore } from "@/features/workout/workout-store";
 
 export function ActiveWorkout() {
-  const { activeWorkout, cancelWorkout, finishWorkout, isSaving } = useWorkoutStore();
+  const { activeWorkout, cancelWorkout, finishWorkout, isSaving, saveError } =
+    useWorkoutStore();
   const [isCanceling, setIsCanceling] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [restStartedAt, setRestStartedAt] = useState<number | null>(null);
@@ -87,6 +88,14 @@ export function ActiveWorkout() {
           </section>
         )}
         <RestTimer onReset={() => setRestStartedAt(null)} startedAt={restStartedAt} />
+        {saveError ? (
+          <p
+            className="rounded-xl border border-red-300/20 bg-red-300/[0.06] px-4 py-3 text-sm text-red-200"
+            role="alert"
+          >
+            {saveError}
+          </p>
+        ) : null}
         <div className="flex flex-col gap-3 border-t border-white/[0.08] pt-5 sm:flex-row sm:justify-between">
           <Button
             className="min-h-12 text-zinc-400 hover:text-red-300 sm:order-1"

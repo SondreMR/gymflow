@@ -19,6 +19,7 @@ type WorkoutStoreValue = {
   cancelWorkout: () => void;
   finishWorkout: () => Promise<void>;
   history: WorkoutHistoryEntry[];
+  saveError: string | null;
   isSaving: boolean;
   removeSet: (exerciseId: string, setId: string) => void;
   resetWorkout: () => void;
@@ -81,9 +82,11 @@ export function WorkoutStoreProvider({
   const [summary, setSummary] = useState<WorkoutSummary | null>(null);
   const [history, setHistory] = useState<WorkoutHistoryEntry[]>(initialHistory);
   const [isSaving, setIsSaving] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
   const isSubmitting = useRef(false);
 
   function startWorkout(program: WorkoutProgram, day: WorkoutDay) {
+    setSaveError(null);
     setSummary(null);
     setActiveWorkout({
       id: createId("workout"),
@@ -97,6 +100,7 @@ export function WorkoutStoreProvider({
   }
 
   function startQuickWorkout() {
+    setSaveError(null);
     setSummary(null);
     setActiveWorkout({
       id: createId("workout"),
@@ -143,6 +147,7 @@ export function WorkoutStoreProvider({
 
   async function finishWorkout() {
     if (!activeWorkout || isSubmitting.current) return;
+    setSaveError(null);
     isSubmitting.current = true;
     setIsSaving(true);
     try {
@@ -163,6 +168,10 @@ export function WorkoutStoreProvider({
         historyEntry,
         ...currentHistory.filter((entry) => entry.id !== historyEntry.id),
       ]);
+    } catch {
+      setSaveError(
+        "Your workout could not be saved. Check your connection and try again.",
+      );
     } finally {
       isSubmitting.current = false;
       setIsSaving(false);
@@ -170,11 +179,13 @@ export function WorkoutStoreProvider({
   }
 
   function cancelWorkout() {
+    setSaveError(null);
     setActiveWorkout(null);
     setSummary(null);
   }
 
   function resetWorkout() {
+    setSaveError(null);
     setActiveWorkout(null);
     setSummary(null);
   }
@@ -185,6 +196,7 @@ export function WorkoutStoreProvider({
         activeWorkout,
         history,
         isSaving,
+        saveError,
         summary,
         startWorkout,
         startQuickWorkout,
