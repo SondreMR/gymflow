@@ -39,7 +39,7 @@ type ProgramStoreValue = {
     muscleGroup: string,
   ) => Promise<ExerciseDefinition>;
   createProgram: (draft: ProgramDraft) => Promise<void>;
-  customExercises: ExerciseDefinition[];
+  exercises: ExerciseDefinition[];
   deleteDay: (programId: string, dayId: string) => Promise<void>;
   deleteProgram: (programId: string) => Promise<void>;
   duplicateProgram: (programId: string) => Promise<void>;
@@ -86,8 +86,7 @@ export function ProgramStoreProvider({
   initialPrograms,
 }: ProgramStoreProviderProps) {
   const [programs, setPrograms] = useState<WorkoutProgram[]>(initialPrograms);
-  const [customExercises, setCustomExercises] =
-    useState<ExerciseDefinition[]>(initialExercises);
+  const [exercises, setExercises] = useState<ExerciseDefinition[]>(initialExercises);
 
   async function createProgram(draft: ProgramDraft) {
     const program = await createProgramAction(draft);
@@ -165,7 +164,7 @@ export function ProgramStoreProvider({
 
   async function createCustomExercise(name: string, muscleGroup: string) {
     const exercise = await createExerciseAction(name, muscleGroup);
-    setCustomExercises((currentExercises) => {
+    setExercises((currentExercises) => {
       const index = currentExercises.findIndex((current) => current.id === exercise.id);
       return index === -1
         ? [...currentExercises, exercise].sort((first, second) =>
@@ -182,7 +181,7 @@ export function ProgramStoreProvider({
     <ProgramStoreContext.Provider
       value={{
         programs,
-        customExercises,
+        exercises,
         createProgram,
         updateProgram,
         deleteProgram,
@@ -210,6 +209,6 @@ export function useProgramStore() {
 }
 
 export function useAvailableExercises() {
-  const { customExercises } = useProgramStore();
-  return customExercises;
+  const { exercises } = useProgramStore();
+  return exercises;
 }

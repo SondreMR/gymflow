@@ -174,18 +174,16 @@ export async function createExerciseAction(
   muscleGroup: string,
 ): Promise<ExerciseDefinition> {
   await ensureProgramOwner();
+  const normalizedName = normalizeName(name, "Exercise name");
+  const normalizedMuscleGroup = normalizeName(muscleGroup, "Muscle group");
   const exercise = await prisma.exercise.upsert({
-    where: {
-      userId_name: {
-        userId: PROGRAM_OWNER_ID,
-        name: normalizeName(name, "Exercise name"),
-      },
-    },
+    where: { userId_name: { userId: PROGRAM_OWNER_ID, name: normalizedName } },
     update: { muscleGroup: normalizeName(muscleGroup, "Muscle group") },
     create: {
       userId: PROGRAM_OWNER_ID,
-      name: normalizeName(name, "Exercise name"),
-      muscleGroup: normalizeName(muscleGroup, "Muscle group"),
+      name: normalizedName,
+      muscleGroup: normalizedMuscleGroup,
+      isSystem: false,
     },
   });
   revalidatePrograms();
@@ -193,6 +191,8 @@ export async function createExerciseAction(
     id: exercise.id,
     name: exercise.name,
     muscleGroup: exercise.muscleGroup || "Custom",
+    equipment: exercise.equipment || undefined,
+    isSystem: exercise.isSystem,
   };
 }
 

@@ -102,18 +102,28 @@ export async function getProgramBootstrap() {
       },
     }),
     prisma.exercise.findMany({
-      where: { userId: PROGRAM_OWNER_ID },
+      where: {
+        OR: [{ isSystem: true }, { userId: PROGRAM_OWNER_ID, isSystem: false }],
+      },
       orderBy: { name: "asc" },
-      select: { id: true, name: true, muscleGroup: true },
+      select: {
+        id: true,
+        name: true,
+        muscleGroup: true,
+        equipment: true,
+        isSystem: true,
+      },
     }),
   ]);
 
   return {
     programs: programs.map(toWorkoutProgram),
-    exercises: exercises.map(({ id, name, muscleGroup }) => ({
+    exercises: exercises.map(({ id, name, muscleGroup, equipment, isSystem }) => ({
       id,
       name,
       muscleGroup: muscleGroup || "Custom",
+      equipment: equipment || undefined,
+      isSystem,
     })),
   };
 }

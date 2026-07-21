@@ -81,18 +81,24 @@ model WorkoutDay {
 
 model Exercise {
   id          String       @id @default(cuid())
-  userId      String
+  userId      String?
   name        String
   description String?
+  muscleGroup String?
+  equipment   String?
+  isSystem    Boolean      @default(false)
+  systemKey   String?      @unique
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  user            User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user            User?                    @relation(fields: [userId], references: [id], onDelete: Cascade)
   workoutDayLinks WorkoutDayExercise[]
   sessionExercises WorkoutSessionExercise[]
 
   @@unique([userId, name])
   @@index([userId])
+  @@index([isSystem, muscleGroup])
+  @@index([name])
 }
 
 model WorkoutDayExercise {

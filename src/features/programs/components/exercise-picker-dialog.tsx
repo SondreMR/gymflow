@@ -28,19 +28,40 @@ export function ExercisePickerDialog({
   const [isCreating, setIsCreating] = useState(false);
   const [name, setName] = useState("");
   const [muscleGroup, setMuscleGroup] = useState("");
+  const [selectedMuscleGroup, setSelectedMuscleGroup] = useState("All muscle groups");
   const [error, setError] = useState("");
   const normalizedQuery = query.trim().toLowerCase();
+  const muscleGroups = useMemo(
+    () => Array.from(new Set(exercises.map((exercise) => exercise.muscleGroup))).sort(),
+    [exercises],
+  );
   const availableExercises = useMemo(
     () =>
-      exercises.filter(
-        (exercise) =>
-          !existingExerciseIds.includes(exercise.id) &&
-          (!normalizedQuery ||
-            `${exercise.name} ${exercise.muscleGroup}`
-              .toLowerCase()
-              .includes(normalizedQuery)),
-      ),
-    [existingExerciseIds, exercises, normalizedQuery],
+      exercises
+        .filter(
+          (exercise) =>
+            !existingExerciseIds.includes(exercise.id) &&
+            (!normalizedQuery ||
+              exercise.name.toLowerCase().includes(normalizedQuery)) &&
+            (selectedMuscleGroup === "All muscle groups" ||
+              exercise.muscleGroup === selectedMuscleGroup),
+        )
+        .sort((first, second) => {
+          const firstScore =
+            first.name.toLowerCase() === normalizedQuery
+              ? 0
+              : first.name.toLowerCase().startsWith(normalizedQuery)
+                ? 1
+                : 2;
+          const secondScore =
+            second.name.toLowerCase() === normalizedQuery
+              ? 0
+              : second.name.toLowerCase().startsWith(normalizedQuery)
+                ? 1
+                : 2;
+          return firstScore - secondScore || first.name.localeCompare(second.name);
+        }),
+    [existingExerciseIds, exercises, normalizedQuery, selectedMuscleGroup],
   );
 
   function selectExercise(exercise: ExerciseDefinition) {
@@ -58,7 +79,9 @@ export function ExercisePickerDialog({
     }
     if (
       exercises.some(
-        (exercise) => exercise.name.trim().toLowerCase() === trimmedName.toLowerCase(),
+        (exercise) =>
+          !exercise.isSystem &&
+          exercise.name.trim().toLowerCase() === trimmedName.toLowerCase(),
       )
     ) {
       setError("An exercise with this name is already available.");
@@ -71,7 +94,7 @@ export function ExercisePickerDialog({
     <Dialog
       description={
         isCreating
-          ? "Custom exercises stay available for this prototype session."
+          ? "Custom exercises are saved to your reusable exercise library."
           : "Choose an exercise to add to this workout day."
       }
       onClose={onClose}
@@ -136,6 +159,20 @@ export function ExercisePickerDialog({
               value={query}
             />
           </div>
+          <label className="sr-only" htmlFor="exercise-muscle-group-filter">
+            Filter by muscle group
+          </label>
+          <select
+            className="mt-3 w-full rounded-xl border border-white/[0.1] bg-[#0d0e12] px-3 py-3 text-sm text-zinc-200 outline-none focus:border-lime-300"
+            id="exercise-muscle-group-filter"
+            onChange={(event) => setSelectedMuscleGroup(event.target.value)}
+            value={selectedMuscleGroup}
+          >
+            <option>All muscle groups</option>
+            {muscleGroups.map((group) => (
+              <option key={group}>{group}</option>
+            ))}
+          </select>
           <div className="mt-4 max-h-72 space-y-1 overflow-y-auto pr-1">
             {availableExercises.length ? (
               availableExercises.map((exercise) => (
@@ -145,10 +182,20 @@ export function ExercisePickerDialog({
                   onClick={() => selectExercise(exercise)}
                   type="button"
                 >
-                  <span className="text-sm font-semibold text-zinc-100">
-                    {exercise.name}
+                  <span>
+                    <span className="block text-sm font-semibold text-zinc-100">
+                      {exercise.name}
+                    </span>
+                    <span className="mt-1 block text-xs text-zinc-500">
+                      {exercise.muscleGroup}
+                      {` · ${exercise.equipment ?? "Custom"}`}
+                    </span>
                   </span>
-                  <span className="text-xs text-zinc-500">{exercise.muscleGroup}</span>
+                  {!exercise.isSystem ? (
+                    <span className="rounded-full bg-white/[0.06] px-2 py-1 text-[10px] font-bold tracking-[0.08em] text-zinc-400 uppercase">
+                      Custom
+                    </span>
+                  ) : null}
                 </button>
               ))
             ) : (

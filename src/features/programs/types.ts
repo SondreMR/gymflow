@@ -1,5 +1,7 @@
 export type ExerciseDefinition = {
+  equipment?: string;
   id: string;
+  isSystem?: boolean;
   muscleGroup: string;
   name: string;
 };
