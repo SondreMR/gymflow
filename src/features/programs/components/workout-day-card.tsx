@@ -1,7 +1,7 @@
 "use client";
 
 import { Dumbbell, Pencil, Plus, Trash2 } from "lucide-react";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/features/programs/components/confirm-dialog";
@@ -11,6 +11,65 @@ import { useProgramStore } from "@/features/programs/program-store";
 import type { ProgramExercise, WorkoutDay } from "@/features/programs/types";
 
 type WorkoutDayCardProps = { day: WorkoutDay; programId: string };
+
+function EditablePositiveInteger({
+  ariaLabel,
+  onSave,
+  value,
+}: {
+  ariaLabel: string;
+  onSave: (value: number | undefined) => Promise<void>;
+  value?: number;
+}) {
+  const [draft, setDraft] = useState(value?.toString() ?? "");
+  const [error, setError] = useState("");
+  const [isSaving, setIsSaving] = useState(false);
+
+  useEffect(() => setDraft(value?.toString() ?? ""), [value]);
+
+  async function save() {
+    const trimmed = draft.trim();
+    if (trimmed && !/^[1-9]\d*$/.test(trimmed)) {
+      setError("Use a positive whole number.");
+      return;
+    }
+    const nextValue = trimmed ? Number(trimmed) : undefined;
+    if (nextValue === value) return;
+    setError("");
+    setIsSaving(true);
+    try {
+      await onSave(nextValue);
+    } catch (cause) {
+      setError(cause instanceof Error ? cause.message : "Unable to save value.");
+    } finally {
+      setIsSaving(false);
+    }
+  }
+
+  return (
+    <span>
+      <input
+        aria-label={ariaLabel}
+        aria-describedby={error ? `${ariaLabel}-error` : undefined}
+        className="mt-1 w-full rounded-lg border border-white/[0.1] bg-[#0d0e12] px-2.5 py-2 text-sm font-semibold text-zinc-100 outline-none focus:border-lime-300"
+        disabled={isSaving}
+        inputMode="numeric"
+        onBlur={save}
+        onChange={(event) => setDraft(event.target.value)}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") event.currentTarget.blur();
+        }}
+        placeholder="—"
+        value={draft}
+      />
+      {error ? (
+        <span className="mt-1 block text-[11px] text-red-300" id={`${ariaLabel}-error`}>
+          {error}
+        </span>
+      ) : null}
+    </span>
+  );
+}
 
 function ExerciseRow({
   dayId,
@@ -22,9 +81,6 @@ function ExerciseRow({
   programId: string;
 }) {
   const { removeExercise, updateExercise } = useProgramStore();
-  const inputClass =
-    "w-full rounded-lg border border-white/[0.1] bg-[#0d0e12] px-2.5 py-2 text-sm font-semibold text-zinc-100 outline-none focus:border-lime-300";
-
   return (
     <li className="grid gap-3 border-t border-white/[0.08] py-4 md:grid-cols-[minmax(0,1fr)_92px_92px_92px_auto] md:items-center">
       <div className="min-w-0">
@@ -33,49 +89,34 @@ function ExerciseRow({
       </div>
       <label className="text-xs font-medium text-zinc-500">
         Sets
-        <input
-          aria-label={`${exercise.name} target sets`}
-          className={`${inputClass} mt-1`}
-          min={1}
-          onChange={(event) =>
+        <EditablePositiveInteger
+          ariaLabel={`${exercise.name} target sets`}
+          onSave={(targetSets) =>
             updateExercise(programId, dayId, exercise.id, {
-              targetSets: Math.max(1, Number(event.target.value) || 1),
+              targetSets: targetSets ?? exercise.targetSets,
             })
           }
-          type="number"
           value={exercise.targetSets}
         />
       </label>
       <label className="text-xs font-medium text-zinc-500">
         Min reps
-        <input
-          aria-label={`${exercise.name} minimum reps`}
-          className={`${inputClass} mt-1`}
-          min={1}
-          onChange={(event) =>
-            updateExercise(programId, dayId, exercise.id, {
-              targetRepMin: event.target.value ? Number(event.target.value) : undefined,
-            })
+        <EditablePositiveInteger
+          ariaLabel={`${exercise.name} minimum reps`}
+          onSave={(targetRepMin) =>
+            updateExercise(programId, dayId, exercise.id, { targetRepMin })
           }
-          placeholder="—"
-          type="number"
-          value={exercise.targetRepMin ?? ""}
+          value={exercise.targetRepMin}
         />
       </label>
       <label className="text-xs font-medium text-zinc-500">
         Max reps
-        <input
-          aria-label={`${exercise.name} maximum reps`}
-          className={`${inputClass} mt-1`}
-          min={1}
-          onChange={(event) =>
-            updateExercise(programId, dayId, exercise.id, {
-              targetRepMax: event.target.value ? Number(event.target.value) : undefined,
-            })
+        <EditablePositiveInteger
+          ariaLabel={`${exercise.name} maximum reps`}
+          onSave={(targetRepMax) =>
+            updateExercise(programId, dayId, exercise.id, { targetRepMax })
           }
-          placeholder="—"
-          type="number"
-          value={exercise.targetRepMax ?? ""}
+          value={exercise.targetRepMax}
         />
       </label>
       <Button

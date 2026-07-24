@@ -1,10 +1,17 @@
 "use client";
 
-import { createContext, useContext, useRef, useState } from "react";
+import { createContext, useContext, useEffect, useRef, useState } from "react";
 import type { ReactNode } from "react";
 
 import type { WorkoutDay, WorkoutProgram } from "@/features/programs/types";
-import { saveCompletedWorkoutAction } from "@/features/workout/actions";
+import {
+  addQuickWorkoutExerciseAction,
+  createQuickWorkoutAction,
+  discardQuickWorkoutAction,
+  removeQuickWorkoutExerciseAction,
+  saveCompletedWorkoutAction,
+} from "@/features/workout/actions";
+import type { ExerciseDefinition } from "@/features/programs/types";
 import type {
   ActiveWorkout,
   ActiveWorkoutExercise,
@@ -15,15 +22,18 @@ import type {
 
 type WorkoutStoreValue = {
   activeWorkout: ActiveWorkout | null;
+  addExercise: (exercise: ExerciseDefinition) => Promise<void>;
   addSet: (exerciseId: string) => void;
-  cancelWorkout: () => void;
+  cancelWorkout: () => Promise<void>;
   finishWorkout: () => Promise<void>;
   history: WorkoutHistoryEntry[];
   saveError: string | null;
   isSaving: boolean;
+  isStarting: boolean;
+  removeExercise: (exerciseId: string) => Promise<void>;
   removeSet: (exerciseId: string, setId: string) => void;
   resetWorkout: () => void;
-  startQuickWorkout: () => void;
+  startQuickWorkout: () => Promise<void>;
   startWorkout: (program: WorkoutProgram, day: WorkoutDay) => void;
   summary: WorkoutSummary | null;
   updateExerciseNote: (exerciseId: string, note: string) => void;
@@ -57,6 +67,20 @@ function makeActiveExercise(
   };
 }
 
+function makeQuickActiveExercise(exercise: ExerciseDefinition): ActiveWorkoutExercise {
+  return {
+    id: createId("active-exercise"),
+    exerciseId: exercise.id,
+    name: exercise.name,
+    muscleGroup: exercise.muscleGroup,
+    targetSets: 1,
+    note: "",
+    sets: [makeSet()],
+  };
+}
+
+const QUICK_WORKOUT_STORAGE_KEY = "gymflow-active-quick-workout";
+
 function updateActiveExercise(
   workout: ActiveWorkout | null,
   exerciseId: string,
@@ -73,17 +97,46 @@ function updateActiveExercise(
 
 export function WorkoutStoreProvider({
   children,
+  initialActiveWorkout,
   initialHistory,
 }: {
   children: ReactNode;
+  initialActiveWorkout: ActiveWorkout | null;
   initialHistory: WorkoutHistoryEntry[];
 }) {
-  const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(null);
+  const [activeWorkout, setActiveWorkout] = useState<ActiveWorkout | null>(
+    initialActiveWorkout,
+  );
   const [summary, setSummary] = useState<WorkoutSummary | null>(null);
   const [history, setHistory] = useState<WorkoutHistoryEntry[]>(initialHistory);
   const [isSaving, setIsSaving] = useState(false);
+  const [isStarting, setIsStarting] = useState(false);
   const [saveError, setSaveError] = useState<string | null>(null);
   const isSubmitting = useRef(false);
+  const hasHydratedDraft = useRef(false);
+
+  useEffect(() => {
+    if (!activeWorkout?.sessionId) {
+      if (!activeWorkout) localStorage.removeItem(QUICK_WORKOUT_STORAGE_KEY);
+      return;
+    }
+    localStorage.setItem(QUICK_WORKOUT_STORAGE_KEY, JSON.stringify(activeWorkout));
+  }, [activeWorkout]);
+
+  useEffect(() => {
+    if (hasHydratedDraft.current) return;
+    hasHydratedDraft.current = true;
+    const saved = localStorage.getItem(QUICK_WORKOUT_STORAGE_KEY);
+    if (!saved) return;
+    try {
+      const parsed = JSON.parse(saved) as ActiveWorkout;
+      if (parsed.sessionId && parsed.sessionId === initialActiveWorkout?.sessionId) {
+        setActiveWorkout(parsed);
+      }
+    } catch {
+      localStorage.removeItem(QUICK_WORKOUT_STORAGE_KEY);
+    }
+  }, [initialActiveWorkout?.sessionId]);
 
   function startWorkout(program: WorkoutProgram, day: WorkoutDay) {
     setSaveError(null);
@@ -99,15 +152,58 @@ export function WorkoutStoreProvider({
     });
   }
 
-  function startQuickWorkout() {
+  async function startQuickWorkout() {
     setSaveError(null);
     setSummary(null);
-    setActiveWorkout({
-      id: createId("workout"),
-      workoutDayName: "Quick workout",
-      startedAt: Date.now(),
-      exercises: [],
-    });
+    setIsStarting(true);
+    try {
+      const startedAt = Date.now();
+      const sessionId = await createQuickWorkoutAction(startedAt);
+      setActiveWorkout({
+        id: createId("workout"),
+        sessionId,
+        workoutDayName: "Quick workout",
+        startedAt,
+        exercises: [],
+      });
+    } catch (error) {
+      setSaveError(error instanceof Error ? error.message : "Unable to start workout.");
+    } finally {
+      setIsStarting(false);
+    }
+  }
+
+  async function addExercise(exercise: ExerciseDefinition) {
+    const sessionId = activeWorkout?.sessionId;
+    if (!activeWorkout || !sessionId) throw new Error("Start a quick workout first.");
+    if (activeWorkout.exercises.some((current) => current.exerciseId === exercise.id)) {
+      throw new Error("This exercise is already in the workout.");
+    }
+    await addQuickWorkoutExerciseAction(sessionId, exercise.id);
+    setActiveWorkout((workout) =>
+      workout
+        ? {
+            ...workout,
+            exercises: [...workout.exercises, makeQuickActiveExercise(exercise)],
+          }
+        : workout,
+    );
+  }
+
+  async function removeExercise(exerciseId: string) {
+    const sessionId = activeWorkout?.sessionId;
+    if (!activeWorkout || !sessionId) return;
+    await removeQuickWorkoutExerciseAction(sessionId, exerciseId);
+    setActiveWorkout((workout) =>
+      workout
+        ? {
+            ...workout,
+            exercises: workout.exercises.filter(
+              (exercise) => exercise.exerciseId !== exerciseId,
+            ),
+          }
+        : workout,
+    );
   }
 
   function updateSet(exerciseId: string, setId: string, patch: Partial<WorkoutSetLog>) {
@@ -147,11 +243,17 @@ export function WorkoutStoreProvider({
 
   async function finishWorkout() {
     if (!activeWorkout || isSubmitting.current) return;
+    if (!activeWorkout.exercises.length) {
+      setSaveError("Add at least one exercise before finishing this workout.");
+      return;
+    }
     setSaveError(null);
     isSubmitting.current = true;
     setIsSaving(true);
     try {
       const savedSummary = await saveCompletedWorkoutAction(activeWorkout);
+      if (activeWorkout.sessionId)
+        await discardQuickWorkoutAction(activeWorkout.sessionId);
       setSummary(savedSummary);
       setActiveWorkout(null);
       const historyEntry: WorkoutHistoryEntry = {
@@ -178,8 +280,10 @@ export function WorkoutStoreProvider({
     }
   }
 
-  function cancelWorkout() {
+  async function cancelWorkout() {
     setSaveError(null);
+    if (activeWorkout?.sessionId)
+      await discardQuickWorkoutAction(activeWorkout.sessionId);
     setActiveWorkout(null);
     setSummary(null);
   }
@@ -194,8 +298,10 @@ export function WorkoutStoreProvider({
     <WorkoutStoreContext.Provider
       value={{
         activeWorkout,
+        addExercise,
         history,
         isSaving,
+        isStarting,
         saveError,
         summary,
         startWorkout,
@@ -207,6 +313,7 @@ export function WorkoutStoreProvider({
         finishWorkout,
         cancelWorkout,
         resetWorkout,
+        removeExercise,
       }}
     >
       {children}

@@ -12,12 +12,14 @@ import {
 import type { ExerciseDefinition } from "@/features/programs/types";
 
 type ExercisePickerDialogProps = {
+  destinationLabel?: string;
   existingExerciseIds: string[];
   onClose: () => void;
   onSelect: (exercise: ExerciseDefinition) => Promise<void>;
 };
 
 export function ExercisePickerDialog({
+  destinationLabel = "workout day",
   existingExerciseIds,
   onClose,
   onSelect,
@@ -111,7 +113,7 @@ export function ExercisePickerDialog({
       description={
         isCreating
           ? "Custom exercises are saved to your reusable exercise library."
-          : "Choose an exercise to add to this workout day."
+          : `Choose an exercise to add to this ${destinationLabel}.`
       }
       onClose={onClose}
       title={isCreating ? "Create custom exercise" : "Add exercise"}

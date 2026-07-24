@@ -3,11 +3,57 @@ import "server-only";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type {
+  ActiveWorkout,
   WorkoutHistoryDetail,
   WorkoutHistoryEntry,
   WorkoutSetLog,
   SavedWorkoutSummary,
 } from "@/features/workout/types";
+
+export async function getActiveQuickWorkout(): Promise<ActiveWorkout | null> {
+  const user = await getCurrentUser();
+  const session = await prisma.workoutSession.findFirst({
+    where: {
+      userId: user.id,
+      status: "ACTIVE",
+      sourceProgramId: null,
+      sourceWorkoutDayId: null,
+    },
+    orderBy: { startedAt: "desc" },
+    include: {
+      exercises: {
+        orderBy: { position: "asc" },
+        include: {
+          sourceExercise: { select: { muscleGroup: true, name: true } },
+          sets: { orderBy: { position: "asc" } },
+        },
+      },
+    },
+  });
+  if (!session) return null;
+  return {
+    id: session.id,
+    sessionId: session.id,
+    workoutDayName: "Quick workout",
+    startedAt: session.startedAt.getTime(),
+    exercises: session.exercises.map((exercise) => ({
+      id: exercise.id,
+      exerciseId: exercise.sourceExerciseId ?? exercise.id,
+      name: exercise.sourceExercise?.name ?? exercise.exerciseName,
+      muscleGroup: exercise.sourceExercise?.muscleGroup ?? "Custom",
+      targetSets: exercise.targetSets ?? 1,
+      targetRepMin: exercise.targetRepMin ?? undefined,
+      targetRepMax: exercise.targetRepMax ?? undefined,
+      note: exercise.note ?? "",
+      sets: exercise.sets.map((set) => ({
+        id: set.id,
+        completed: set.isCompleted,
+        reps: set.reps ?? undefined,
+        weightKg: set.weightKg ? Number(set.weightKg.toString()) : undefined,
+      })),
+    })),
+  };
+}
 
 type SessionWithExercises = {
   id: string;

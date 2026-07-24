@@ -1,20 +1,29 @@
 "use client";
 
-import { CircleStop, Dumbbell, X } from "lucide-react";
+import { CircleStop, Dumbbell, Plus, Trash2, X } from "lucide-react";
 import { useState } from "react";
 
 import { Button } from "@/components/ui/button";
 import { ConfirmDialog } from "@/features/programs/components/confirm-dialog";
+import { ExercisePickerDialog } from "@/features/programs/components/exercise-picker-dialog";
 import { RestTimer, ElapsedTimer } from "@/features/workout/components/workout-timer";
 import { WorkoutExerciseCard } from "@/features/workout/components/workout-exercise-card";
 import { useWorkoutStore } from "@/features/workout/workout-store";
 
 export function ActiveWorkout() {
-  const { activeWorkout, cancelWorkout, finishWorkout, isSaving, saveError } =
-    useWorkoutStore();
+  const {
+    activeWorkout,
+    addExercise,
+    cancelWorkout,
+    finishWorkout,
+    isSaving,
+    removeExercise,
+    saveError,
+  } = useWorkoutStore();
   const [isCanceling, setIsCanceling] = useState(false);
   const [isFinishing, setIsFinishing] = useState(false);
   const [restStartedAt, setRestStartedAt] = useState<number | null>(null);
+  const [isAddingExercise, setIsAddingExercise] = useState(false);
 
   if (!activeWorkout) return null;
   const allSets = activeWorkout.exercises.flatMap((exercise) => exercise.sets);
@@ -68,13 +77,31 @@ export function ActiveWorkout() {
           </p>
           <p className="text-sm font-semibold text-lime-300">{progress}%</p>
         </div>
+        <Button
+          className="min-h-11 w-full sm:w-auto"
+          onClick={() => setIsAddingExercise(true)}
+        >
+          <Plus aria-hidden="true" size={17} />
+          Add exercise
+        </Button>
         {activeWorkout.exercises.length ? (
           activeWorkout.exercises.map((exercise) => (
-            <WorkoutExerciseCard
-              exercise={exercise}
-              key={exercise.id}
-              onSetCompleted={() => setRestStartedAt(Date.now())}
-            />
+            <div className="space-y-2" key={exercise.id}>
+              <WorkoutExerciseCard
+                exercise={exercise}
+                onSetCompleted={() => setRestStartedAt(Date.now())}
+              />
+              {activeWorkout.sessionId ? (
+                <Button
+                  className="text-zinc-500 hover:text-red-300"
+                  onClick={() => removeExercise(exercise.exerciseId)}
+                  variant="ghost"
+                >
+                  <Trash2 aria-hidden="true" size={16} />
+                  Remove exercise
+                </Button>
+              ) : null}
+            </div>
           ))
         ) : (
           <section className="rounded-2xl border border-dashed border-white/[0.12] bg-[#131419] p-8 text-center">
@@ -83,7 +110,7 @@ export function ActiveWorkout() {
             </span>
             <h2 className="mt-4 font-bold text-white">Quick workout started</h2>
             <p className="mt-2 text-sm leading-6 text-zinc-400">
-              This empty session is ready for future freeform exercise logging.
+              Build your workout as you go. Add the first exercise to begin logging.
             </p>
           </section>
         )}
@@ -123,6 +150,16 @@ export function ActiveWorkout() {
           onClose={() => setIsCanceling(false)}
           onConfirm={cancelWorkout}
           title="Cancel workout?"
+        />
+      ) : null}
+      {isAddingExercise ? (
+        <ExercisePickerDialog
+          destinationLabel="quick workout"
+          existingExerciseIds={activeWorkout.exercises.map(
+            (exercise) => exercise.exerciseId,
+          )}
+          onClose={() => setIsAddingExercise(false)}
+          onSelect={addExercise}
         />
       ) : null}
       {isFinishing ? (

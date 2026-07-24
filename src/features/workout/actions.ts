@@ -19,6 +19,107 @@ import { getSavedWorkoutSummary } from "@/features/workout/data";
 import { prisma } from "@/lib/prisma";
 import type { ActiveWorkout, SavedWorkoutSummary } from "@/features/workout/types";
 
+async function requireActiveQuickSession(sessionId: string, userId: string) {
+  const session = await prisma.workoutSession.findFirst({
+    where: {
+      id: sessionId,
+      userId,
+      status: "ACTIVE",
+      sourceProgramId: null,
+      sourceWorkoutDayId: null,
+    },
+    select: { id: true },
+  });
+  if (!session) throw new Error("Active quick workout not found.");
+}
+
+export async function createQuickWorkoutAction(startedAt: number) {
+  const user = await getCurrentUser();
+  const existing = await prisma.workoutSession.findFirst({
+    where: {
+      userId: user.id,
+      status: "ACTIVE",
+      sourceProgramId: null,
+      sourceWorkoutDayId: null,
+    },
+    orderBy: { startedAt: "desc" },
+    select: { id: true },
+  });
+  if (existing) return existing.id;
+  if (!Number.isFinite(startedAt) || startedAt <= 0 || startedAt > Date.now() + 60000) {
+    throw new Error("Workout start time is invalid.");
+  }
+  const session = await prisma.workoutSession.create({
+    data: {
+      userId: user.id,
+      programName: "Quick workout",
+      workoutDayName: "Quick workout",
+      startedAt: new Date(startedAt),
+      status: "ACTIVE",
+    },
+    select: { id: true },
+  });
+  return session.id;
+}
+
+export async function addQuickWorkoutExerciseAction(
+  sessionId: string,
+  exerciseId: string,
+) {
+  const user = await getCurrentUser();
+  await requireActiveQuickSession(sessionId, user.id);
+  const exercise = await prisma.exercise.findFirst({
+    where: {
+      id: exerciseId,
+      OR: [
+        { isSystem: true, userId: null },
+        { isSystem: false, userId: user.id },
+      ],
+    },
+    select: { id: true, name: true },
+  });
+  if (!exercise) throw new Error("Exercise not found.");
+  const duplicate = await prisma.workoutSessionExercise.findFirst({
+    where: { workoutSessionId: sessionId, sourceExerciseId: exercise.id },
+    select: { id: true },
+  });
+  if (duplicate) throw new Error("This exercise is already in the workout.");
+  const position = await prisma.workoutSessionExercise.count({
+    where: { workoutSessionId: sessionId },
+  });
+  const sessionExercise = await prisma.workoutSessionExercise.create({
+    data: {
+      workoutSessionId: sessionId,
+      sourceExerciseId: exercise.id,
+      exerciseName: exercise.name,
+      position,
+      targetSets: 1,
+    },
+    select: { id: true },
+  });
+  await prisma.workoutSet.create({
+    data: { workoutSessionExerciseId: sessionExercise.id, position: 0 },
+  });
+}
+
+export async function removeQuickWorkoutExerciseAction(
+  sessionId: string,
+  exerciseId: string,
+) {
+  const user = await getCurrentUser();
+  await requireActiveQuickSession(sessionId, user.id);
+  await prisma.workoutSessionExercise.deleteMany({
+    where: { workoutSessionId: sessionId, sourceExerciseId: exerciseId },
+  });
+}
+
+export async function discardQuickWorkoutAction(sessionId: string) {
+  const user = await getCurrentUser();
+  await prisma.workoutSession.deleteMany({
+    where: { id: sessionId, userId: user.id, status: "ACTIVE" },
+  });
+}
+
 function assertText(value: string, field: string, maxLength: number) {
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > maxLength) throw new Error(`${field} is invalid.`);

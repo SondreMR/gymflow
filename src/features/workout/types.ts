@@ -14,6 +14,7 @@ export type ActiveWorkoutExercise = {
 export type ActiveWorkout = {
   exercises: ActiveWorkoutExercise[];
   id: string;
+  sessionId?: string;
   sourceProgramId?: string;
   sourceWorkoutDayId?: string;
   programName?: string;

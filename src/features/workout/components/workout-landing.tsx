@@ -11,7 +11,7 @@ import { useWorkoutStore } from "@/features/workout/workout-store";
 
 export function WorkoutLanding() {
   const { programs } = useProgramStore();
-  const { startQuickWorkout, startWorkout } = useWorkoutStore();
+  const { isStarting, startQuickWorkout, startWorkout } = useWorkoutStore();
   const programsWithDays = programs.filter((program) => program.days.length > 0);
 
   return (
@@ -31,9 +31,13 @@ export function WorkoutLanding() {
                 session and build as you go.
               </p>
             </div>
-            <Button className="min-h-12 shrink-0" onClick={startQuickWorkout}>
+            <Button
+              className="min-h-12 shrink-0"
+              disabled={isStarting}
+              onClick={startQuickWorkout}
+            >
               <Zap aria-hidden="true" size={17} />
-              Quick workout
+              {isStarting ? "Starting workout…" : "Quick workout"}
             </Button>
           </div>
         </section>

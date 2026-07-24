@@ -3,6 +3,7 @@
 import { revalidatePath } from "next/cache";
 
 import { getProgramById } from "@/features/programs/data";
+import { validateTargetValues } from "@/features/programs/program-validation";
 import { getCurrentUser } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import type {
@@ -260,20 +261,7 @@ export async function updateDayExerciseAction(
   const targetRepMax = Object.hasOwn(patch, "targetRepMax")
     ? (patch.targetRepMax ?? null)
     : current.targetRepMax;
-  if (!Number.isInteger(targetSets) || targetSets < 1 || targetSets > 20)
-    throw new Error("Target sets must be between 1 and 20.");
-  if ((targetRepMin === null) !== (targetRepMax === null))
-    throw new Error("Set both rep range values or leave both empty.");
-  if (
-    targetRepMin !== null &&
-    targetRepMax !== null &&
-    (!Number.isInteger(targetRepMin) ||
-      !Number.isInteger(targetRepMax) ||
-      targetRepMin < 1 ||
-      targetRepMax < targetRepMin)
-  ) {
-    throw new Error("Rep range is invalid.");
-  }
+  validateTargetValues({ targetSets, targetRepMin, targetRepMax });
   await prisma.workoutDayExercise.update({
     where: { id: programExerciseId },
     data: { targetSets, targetRepMin, targetRepMax },
