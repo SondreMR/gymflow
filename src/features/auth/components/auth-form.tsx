@@ -6,6 +6,7 @@ import { useState } from "react";
 
 import { Logo } from "@/components/app-shell/logo";
 import { env } from "@/config/env";
+import { buildAuthCallbackUrl } from "@/features/auth/oauth-redirect";
 import { createClient } from "@/lib/supabase/client";
 
 type AuthFeedback = { message: string; type: "error" | "success" };
@@ -67,7 +68,6 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
   const [busy, setBusy] = useState(false);
   const isSignup = mode === "sign-up";
   const next = params.get("next")?.startsWith("/") ? params.get("next")! : "/";
-  const callbackUrl = `${env.NEXT_PUBLIC_APP_URL.replace(/\/$/, "")}/auth/callback`;
 
   async function emailAuth(event: React.FormEvent) {
     event.preventDefault();
@@ -80,7 +80,10 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
             email,
             password,
             options: {
-              emailRedirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
+              emailRedirectTo: buildAuthCallbackUrl({
+                fallbackAppUrl: env.NEXT_PUBLIC_APP_URL,
+                next,
+              }),
             },
           })
         : await supabase.auth.signInWithPassword({ email, password });
@@ -136,7 +139,11 @@ export function AuthForm({ mode }: { mode: "sign-in" | "sign-up" }) {
       const { error } = await createClient().auth.signInWithOAuth({
         provider: "google",
         options: {
-          redirectTo: `${callbackUrl}?next=${encodeURIComponent(next)}`,
+          redirectTo: buildAuthCallbackUrl({
+            browserOrigin: window.location.origin,
+            fallbackAppUrl: env.NEXT_PUBLIC_APP_URL,
+            next,
+          }),
         },
       });
       if (!error) return;
